@@ -1,9 +1,6 @@
-# -*- coding: utf-8 -*-
-"""
+"""Functions for reading medical images
 https://github.com/fepegar/torchio
-
-Author: Jacob Reinhold
-Created on: 15 Dec 2021
+Author: Jacob Reinhold <jcreinhold@gmail.com>
 """
 
 __all__ = [
@@ -100,14 +97,14 @@ def _read_sitk(
     path: miot.PathLike, *, dtype: npt.DTypeLike = np.float32
 ) -> miot.DataAffine:
     if pathlib.Path(path).is_dir():  # assume DICOM
-        image = _read_dicom(path)
+        image = _read_dicom_sitk(path)
     else:
         image = sitk.ReadImage(str(path))
     data, affine = sitk_to_nib(image, dtype=dtype)
     return data, affine
 
 
-def _read_dicom(directory: miot.PathLike) -> sitk.Image:
+def _read_dicom_sitk(directory: miot.PathLike) -> sitk.Image:
     directory = pathlib.Path(directory)
     if not directory.is_dir():  # unreachable if called from _read_sitk
         raise FileNotFoundError(f"Directory '{directory}' not found")
