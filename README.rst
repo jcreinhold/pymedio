@@ -2,8 +2,8 @@
 medio
 =====
 
-.. image:: https://img.shields.io/pypi/v/medio.svg
-        :target: https://pypi.python.org/pypi/medio
+.. image:: https://img.shields.io/pypi/v/pymedio.svg
+        :target: https://pypi.python.org/pypi/pymedio
 
 .. image:: https://readthedocs.org/projects/medio/badge/?version=latest
         :target: https://medio.readthedocs.io/en/latest/?version=latest

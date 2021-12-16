@@ -15,5 +15,5 @@ bandit==1.7.1
 mypy==0.910
 
 nibabel>=3
-numpy>=1.19
+numpy>=1.21
 SimpleITK~=2.1.0

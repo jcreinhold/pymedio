@@ -1,7 +1,5 @@
-# -*- coding: utf-8 -*-
-"""
-Author: Jacob Reinhold
-Created on: 15 Dec 2021
+"""medio types for type annotations
+Author: Jacob Reinhold <jcreinhold@gmail.com>
 """
 
 import builtins
