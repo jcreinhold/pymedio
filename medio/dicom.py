@@ -1,11 +1,18 @@
 """DICOM-specific functions
+inspired by dicom-numpy: https://github.com/innolitics/dicom-numpy
 Author: Jacob Reinhold <jcreinhold@gmail.com>
 """
 
+from __future__ import annotations
+
 import builtins
+import dataclasses
+import functools
 import io
 import logging
 import math
+import operator
+import pathlib
 import typing
 import warnings
 import zipfile
@@ -14,365 +21,411 @@ import numpy as np
 import numpy.typing as npt
 import pydicom
 
-from medio.exceptions import DicomImportException
+import medio.exceptions as mioe
+import medio.typing as miot
+import medio.utils as miou
 
 logger = logging.getLogger(__name__)
 
 
-def combined_series_from_zipped_stream(
-    data_stream: io.BytesIO,
-    *,
-    rescale: typing.Optional[builtins.bool] = None,
-    rescale_dtype: npt.DTypeLike = np.float32,
-    enforce_slice_spacing: builtins.bool = True,
-) -> typing.Tuple[npt.NDArray, npt.NDArray]:
-    with zipfile.ZipFile(data_stream, mode="r") as zf:
-        datasets = dicom_datasets_from_zip(zf)
-    voxels, ijk_to_xyz = combine_slices(
-        datasets,
-        rescale=rescale,
-        rescale_dtype=rescale_dtype,
-        enforce_slice_spacing=enforce_slice_spacing,
-    )
-    return voxels, ijk_to_xyz
+@dataclasses.dataclass(frozen=True)
+class Cosines:
+    row: npt.NDArray
+    column: npt.NDArray
+    slice: npt.NDArray
 
+    @classmethod
+    def from_orientation(
+        cls: typing.Type[Cosines], image_orientation: typing.List[builtins.float]
+    ) -> Cosines:
+        row_cosine = np.asarray(image_orientation[:3])
+        column_cosine = np.asarray(image_orientation[3:])
+        slice_cosine = np.cross(row_cosine, column_cosine)
+        cosines = cls(row_cosine, column_cosine, slice_cosine)
+        cosines.validate()
+        return cosines
 
-def dicom_datasets_from_zip(zip_file: zipfile.ZipFile) -> typing.List[pydicom.Dataset]:
-    datasets: typing.List[pydicom.Dataset] = []
-    for name in zip_file.namelist():
-        if name.endswith("/"):
-            continue  # skip directories
-        with zip_file.open(name, mode="r") as f:
-            try:
-                dataset = pydicom.dcmread(f)  # type: ignore[arg-type]
-                datasets.append(dataset)
-            except pydicom.errors.InvalidDicomError as e:
-                msg = f"Skipping invalid DICOM file '{name}': {e}"
-                logger.info(msg)
+    def validate(self) -> None:
+        dot_prod = float(np.dot(self.row, self.column).item())
+        if not self._almost_zero(dot_prod, abs_tol=1e-4):
+            msg = f"Non-orthogonal direction cosines: {self.row}, {self.column}"
+            raise mioe.DicomImportException(msg)
+        elif not self._almost_zero(dot_prod, abs_tol=1e-8):
+            msg = f"Direction cosines aren't quite ortho.: {self.row}, {self.column}"
+            warnings.warn(msg)
 
-    if not datasets:
-        msg = "Zipfile does not contain any valid DICOM files"
-        raise DicomImportException(msg)
+        row_cosine_norm = float(np.linalg.norm(self.row).item())
+        if not self._almost_one(row_cosine_norm, abs_tol=1e-4):
+            msg = f"The row direction cosine's magnitude is not 1: {self.row}"
+            raise mioe.DicomImportException(msg)
+        elif not self._almost_one(row_cosine_norm, abs_tol=1e-8):
+            msg = f"The row direction cosine's magnitude is not quite 1: {self.row}"
+            warnings.warn(msg)
 
-    return datasets
-
-
-def combine_slices(
-    datasets: typing.List[pydicom.Dataset],
-    *,
-    rescale: typing.Optional[builtins.bool] = None,
-    rescale_dtype: npt.DTypeLike = np.float32,
-    enforce_slice_spacing: builtins.bool = True,
-) -> typing.Tuple[npt.NDArray, npt.NDArray]:
-    """
-    Given a list of pydicom datasets for an image series, stitch them together into a
-    three-dimensional numpy array.  Also calculate a 4x4 affine transformation
-    matrix that converts the ijk-pixel-indices into the xyz-coordinates in the
-    DICOM patient's coordinate system.
-
-    Returns a two-tuple containing the 3D-ndarray and the affine matrix.
-
-    If `rescale` is set to `None` (the default), then the image array dtype
-    will be preserved, unless any of the DICOM images contain either the
-    `Rescale Slope
-    <https://dicom.innolitics.com/ciods/ct-image/ct-image/00281053>`_ or the
-    `Rescale Intercept <https://dicom.innolitics.com/ciods/ct-image/ct-image/00281052>`_
-    attributes.  If either of these attributes are present, they will be
-    applied to each slice individually.
-
-    If `rescale` is `True` the voxels will be cast to `float32`, if set to
-    `False`, the original dtype will be preserved even if DICOM rescaling information is present.
-
-    If `enforce_slice_spacing` is set to `True`, `combine_slices` will raise a
-    `DicomImportException` if there are missing slices detected in the
-    datasets. If `enforce_slice_spacing` is set to `False`, missing slices will
-    be ignored.
-
-    The returned array has the column-major byte-order.
-
-    Datasets produced by reading DICOMDIR files are ignored.
-
-    This function requires that the datasets:
-
-    - Be in same series (have the same
-      `Series Instance UID <https://dicom.innolitics.com/ciods/ct-image/general-series/0020000e>`_,
-      `Modality <https://dicom.innolitics.com/ciods/ct-image/general-series/00080060>`_,
-      and `SOP Class UID <https://dicom.innolitics.com/ciods/ct-image/sop-common/00080016>`_).
-    - The binary storage of each slice must be the same (have the same
-      `Bits Allocated <https://dicom.innolitics.com/ciods/ct-image/image-pixel/00280100>`_ and
-      `Pixel Representation <https://dicom.innolitics.com/ciods/ct-image/image-pixel/00280103>`_).
-    - The image slice must approximately form a grid. This means there can not
-      be any missing internal slices (missing slices on the ends of the dataset
-      are not detected). This requirement is relaxed if `enforce_slice_spacing` is set to `False`.
-    - Each slice must have the same
-      `Rows <https://dicom.innolitics.com/ciods/ct-image/image-pixel/00280010>`_,
-      `Columns <https://dicom.innolitics.com/ciods/ct-image/image-pixel/00280011>`_,
-      `Samples Per Pixel <https://dicom.innolitics.com/ciods/ct-image/image-pixel/00280002>`_,
-      `Pixel Spacing <https://dicom.innolitics.com/ciods/ct-image/image-plane/00280030>`_, and
-      `Image Orientation (Patient) <https://dicom.innolitics.com/ciods/ct-image/image-plane/00200037>`_
-      attribute values.
-    - The direction cosines derived from the
-      `Image Orientation (Patient) <https://dicom.innolitics.com/ciods/ct-image/image-plane/00200037>`_
-      attribute must, within 1e-4, have a magnitude of 1.  The cosines must
-      also be approximately perpendicular (their dot-product must be within
-      1e-4 of 0).  Warnings are displayed if any of these approximations are
-      below 1e-8, however, since we have seen real datasets with values up to
-      1e-4, we let them pass.
-    - The `Image Position (Patient) <https://dicom.innolitics.com/ciods/ct-image/image-plane/00200032>`_
-      values must approximately form a line.
-
-    If any of these conditions are not met, a `dicom_numpy.DicomImportException` is raised.
-    """
-    slice_datasets = [ds for ds in datasets if not _is_dicomdir(ds)]
-
-    if len(slice_datasets) == 0:
-        raise DicomImportException("Must provide at least one image DICOM dataset")
-
-    _validate_slices_form_uniform_grid(
-        slice_datasets, enforce_slice_spacing=enforce_slice_spacing
-    )
-
-    voxels = _merge_slice_pixel_arrays(
-        slice_datasets, rescale=rescale, rescale_dtype=rescale_dtype
-    )
-    transform = _ijk_to_patient_xyz_transform_matrix(slice_datasets)
-
-    return voxels, transform
-
-
-def sort_by_slice_position(
-    slice_datasets: typing.List[pydicom.Dataset],
-) -> typing.List[pydicom.Dataset]:
-    """
-    Given a list of pydicom Datasets, return the datasets sorted in the image orientation direction.
-
-    This does not require `pixel_array` to be present, and so may be used to associate instance Datasets
-    with the voxels returned from `combine_slices.
-    """
-    slice_positions = _slice_positions(slice_datasets)
-    return [
-        d
-        for (s, d) in sorted(
-            zip(slice_positions, slice_datasets),
-            key=lambda v: v[0],
-        )
-    ]
-
-
-def _is_dicomdir(dataset: pydicom.Dataset) -> builtins.bool:
-    media_sop_class: str = getattr(dataset, "MediaStorageSOPClassUID", None)
-    result: builtins.bool = media_sop_class == "1.2.840.10008.1.3.10"
-    return result
-
-
-def _merge_slice_pixel_arrays(
-    slice_datasets: typing.List[pydicom.Dataset],
-    *,
-    rescale: typing.Optional[builtins.bool] = None,
-    rescale_dtype: npt.DTypeLike = np.float32,
-) -> npt.NDArray:
-    sorted_slice_datasets = sort_by_slice_position(slice_datasets)
-
-    if rescale is None:
-        rescale = any(_requires_rescaling(d) for d in sorted_slice_datasets)
-
-    first_dataset = sorted_slice_datasets[0]
-    slice_dtype = first_dataset.pixel_array.dtype
-    slice_shape = first_dataset.pixel_array.T.shape
-    num_slices = len(sorted_slice_datasets)
-
-    voxels_shape = slice_shape + (num_slices,)
-    voxels_dtype = rescale_dtype if rescale else slice_dtype
-    voxels = np.empty(voxels_shape, dtype=voxels_dtype, order="F")
-
-    for k, dataset in enumerate(sorted_slice_datasets):
-        pixel_array = dataset.pixel_array.T
-        if rescale:
-            slope = float(getattr(dataset, "RescaleSlope", 1))
-            intercept = float(getattr(dataset, "RescaleIntercept", 0))
-            pixel_array = pixel_array.astype(np.float32) * slope + intercept
-        voxels[..., k] = pixel_array
-
-    return voxels
-
-
-def _requires_rescaling(dataset: pydicom.Dataset) -> builtins.bool:
-    return hasattr(dataset, "RescaleSlope") or hasattr(dataset, "RescaleIntercept")
-
-
-def _ijk_to_patient_xyz_transform_matrix(
-    slice_datasets: typing.List[pydicom.Dataset],
-) -> npt.NDArray:
-    first_dataset = sort_by_slice_position(slice_datasets)[0]
-    image_orientation = first_dataset.ImageOrientationPatient
-    row_cosine, column_cosine, slice_cosine = _extract_cosines(image_orientation)
-
-    row_spacing, column_spacing = first_dataset.PixelSpacing
-    slice_spacing = _slice_spacing(slice_datasets)
-
-    transform = np.identity(4, dtype=np.float32)
-
-    transform[:3, 0] = row_cosine * column_spacing
-    transform[:3, 1] = column_cosine * row_spacing
-    transform[:3, 2] = slice_cosine * slice_spacing
-
-    transform[:3, 3] = first_dataset.ImagePositionPatient
-
-    return transform
-
-
-def _validate_slices_form_uniform_grid(
-    slice_datasets: typing.List[pydicom.Dataset],
-    enforce_slice_spacing: builtins.bool = True,
-) -> None:
-    """
-    Perform various data checks to ensure that the list of slices form a
-    evenly-spaced grid of data. Optionally, this can be slightly relaxed to
-    allow for missing slices in the volume.
-
-    Some of these checks are probably not required if the data follows the
-    DICOM specification, however it seems pertinent to check anyway.
-    """
-    invariant_properties = frozenset(
-        [
-            "Modality",
-            "SOPClassUID",
-            "SeriesInstanceUID",
-            "Rows",
-            "Columns",
-            "SamplesPerPixel",
-            "PixelSpacing",
-            "PixelRepresentation",
-            "BitsAllocated",
-        ]
-    )
-
-    for property_name in invariant_properties:
-        _slice_attribute_equal(slice_datasets, property_name)
-
-    _validate_image_orientation(slice_datasets[0].ImageOrientationPatient)
-    _slice_ndarray_attribute_almost_equal(
-        slice_datasets, "ImageOrientationPatient", abs_tol=1e-5
-    )
-
-    if enforce_slice_spacing:
-        slice_positions = _slice_positions(slice_datasets)
-        _check_for_missing_slices(slice_positions)
-
-
-def _validate_image_orientation(image_orientation: npt.NDArray) -> None:
-    """
-    Ensure that the image orientation is supported
-    - The direction cosines have magnitudes of 1 (just in case)
-    - The direction cosines are perpendicular
-    """
-    row_cosine, column_cosine, slice_cosine = _extract_cosines(image_orientation)
-
-    dot_prod = np.dot(row_cosine, column_cosine)
-    if not _almost_zero(dot_prod, abs_tol=1e-4):
-        msg = f"Non-orthogonal direction cosines: {row_cosine}, {column_cosine}"
-        raise DicomImportException(msg)
-    elif not _almost_zero(dot_prod, abs_tol=1e-8):
-        msg = f"Direction cosines aren't quite ortho.: {row_cosine}, {column_cosine}"
-        warnings.warn(msg)
-
-    row_cosine_norm = np.linalg.norm(row_cosine)
-    if not _almost_one(row_cosine_norm, abs_tol=1e-4):
-        msg = f"The row direction cosine's magnitude is not 1: {row_cosine}"
-        raise DicomImportException(msg)
-    elif not _almost_one(row_cosine_norm, abs_tol=1e-8):
-        msg = f"The row direction cosine's magnitude is not quite 1: {row_cosine}"
-        warnings.warn(msg)
-
-    column_cosine_norm = np.linalg.norm(column_cosine)
-    if not _almost_one(column_cosine_norm, abs_tol=1e-4):
-        msg = f"The column direction cosine's magnitude is not 1: {column_cosine}"
-        raise DicomImportException(msg)
-    elif not _almost_one(column_cosine_norm, abs_tol=1e-8):
-        msg = f"The column direction cosine's magnitude is not quite 1: {column_cosine}"
-        warnings.warn(msg)
-
-
-def _almost_zero(value: builtins.float, *, abs_tol: builtins.float) -> builtins.bool:
-    return math.isclose(value, 0.0, abs_tol=abs_tol)
-
-
-def _almost_one(value: builtins.float, *, abs_tol: builtins.float) -> builtins.bool:
-    return math.isclose(value, 1.0, abs_tol=abs_tol)
-
-
-def _extract_cosines(
-    image_orientation: npt.NDArray,
-) -> typing.Tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-    row_cosine = np.array(image_orientation[:3])
-    column_cosine = np.array(image_orientation[3:])
-    slice_cosine = np.cross(row_cosine, column_cosine)
-    return row_cosine, column_cosine, slice_cosine
-
-
-def _slice_attribute_equal(
-    slice_datasets: typing.List[pydicom.Dataset], property_name: builtins.str
-) -> None:
-    initial_value = getattr(slice_datasets[0], property_name, None)
-    for dataset in slice_datasets[1:]:
-        value = getattr(dataset, property_name, None)
-        if value != initial_value:
-            msg = f'All slices must have the same value for "{property_name}": {value} != {initial_value}'
-            raise DicomImportException(msg)
-
-
-def _slice_ndarray_attribute_almost_equal(
-    slice_datasets: typing.List[pydicom.Dataset],
-    property_name: builtins.str,
-    *,
-    abs_tol: builtins.float,
-) -> None:
-    initial_value = getattr(slice_datasets[0], property_name, None)
-    for dataset in slice_datasets[1:]:
-        value = getattr(dataset, property_name, None)
-        if not np.allclose(value, initial_value, atol=abs_tol):
+        column_cosine_norm = float(np.linalg.norm(self.column).item())
+        if not self._almost_one(column_cosine_norm, abs_tol=1e-4):
+            msg = f"The column direction cosine's magnitude is not 1: {self.column}"
+            raise mioe.DicomImportException(msg)
+        elif not self._almost_one(column_cosine_norm, abs_tol=1e-8):
             msg = (
-                f'All slices must have the same value for "{property_name}" within "{abs_tol}": {value} != '
-                f"{initial_value}"
+                f"The column direction cosine's magnitude is not quite 1: {self.column}"
             )
-            raise DicomImportException(msg)
+            warnings.warn(msg)
+
+    @staticmethod
+    def _almost_zero(
+        value: builtins.float, *, abs_tol: builtins.float
+    ) -> builtins.bool:
+        return math.isclose(value, 0.0, abs_tol=abs_tol)
+
+    @staticmethod
+    def _almost_one(value: builtins.float, *, abs_tol: builtins.float) -> builtins.bool:
+        return math.isclose(value, 1.0, abs_tol=abs_tol)
 
 
-def _slice_positions(
-    slice_datasets: typing.List[pydicom.Dataset],
-) -> typing.List[builtins.float]:
-    image_orientation = slice_datasets[0].ImageOrientationPatient
-    row_cosine, column_cosine, slice_cosine = _extract_cosines(image_orientation)
-    return [
-        float(np.dot(slice_cosine, d.ImagePositionPatient).item())
-        for d in slice_datasets
-    ]
+@dataclasses.dataclass(frozen=True)
+class SortedSlices:
+    slices: typing.List[pydicom.Dataset]
+    indices: typing.List[builtins.int]
+    positions: typing.List[builtins.float]
+    cosines: Cosines
+
+    def __len__(self) -> builtins.int:
+        length = len(self.slices)
+        assert length == len(self.indices)
+        assert length == len(self.positions)
+        return length
+
+    @classmethod
+    def from_datasets(
+        cls: typing.Type[SortedSlices], slice_datasets: typing.List[pydicom.Dataset]
+    ) -> SortedSlices:
+        """sort list of pydicom datasets into the correct order"""
+        assert slice_datasets, "slice_datasets empty"
+        image_orientation = slice_datasets[0].ImageOrientationPatient
+        cosines = Cosines.from_orientation(image_orientation)
+        positions = [
+            np.dot(cosines.slice, d.ImagePositionPatient).item() for d in slice_datasets
+        ]
+        _sorted = sorted(enumerate(positions), key=operator.itemgetter(1))
+        sorted_indices, sorted_positions = miou.unzip(_sorted)
+        sorted_slice_datasets = [slice_datasets[i] for i in sorted_indices]
+        return cls(
+            slices=sorted_slice_datasets,
+            indices=sorted_indices,
+            positions=sorted_positions,
+            cosines=cosines,
+        )
+
+    def check_nonuniformity(
+        self,
+        *,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+    ) -> None:
+        if len(self) > 1:
+            pos_diffs = np.diff(self.positions)
+            if not np.allclose(
+                pos_diffs, pos_diffs[0], atol=0.0, rtol=max_nonuniformity
+            ):
+                msg = f"The slice spacing is non-uniform. Slice spacings:\n{pos_diffs}"
+                if fail_outside_max_nonuniformity:
+                    raise mioe.OutsideMaxNonUniformity(msg)
+                else:
+                    warnings.warn(msg)
+
+    @functools.cached_property
+    def slice_spacing(self) -> builtins.float:
+        spacing: builtins.float
+        if len(self) > 1:
+            slice_positions_diffs = np.diff(sorted(self.positions))
+            spacing = float(np.median(slice_positions_diffs).item())
+        elif len(self) == 1:
+            spacing = float(getattr(self.slices[0], "SpacingBetweenSlices", 0))
+        else:
+            raise RuntimeError("slice_datasets must contain at least one dicom image")
+        return spacing
+
+    @functools.cached_property
+    def affine(self) -> npt.NDArray:
+        row_spacing, column_spacing = self.slices[0].PixelSpacing
+        transform = np.identity(4, dtype=np.float32)
+        transform[:3, 0] = self.cosines.row * column_spacing
+        transform[:3, 1] = self.cosines.column * row_spacing
+        transform[:3, 2] = self.cosines.slice * self.slice_spacing
+        transform[:3, 3] = self.positions[0]
+        return transform
 
 
-def _check_for_missing_slices(slice_positions: typing.List[builtins.float]) -> None:
-    if len(slice_positions) > 1:
-        slice_positions_diffs = np.diff(sorted(slice_positions))
-        if not np.allclose(
-            slice_positions_diffs, slice_positions_diffs[0], atol=0, rtol=1e-5
+@dataclasses.dataclass(frozen=True)
+class DICOMDir:
+    slices: typing.List[pydicom.Dataset]
+    positions: typing.List[builtins.float]
+    spacing: builtins.float
+    affine: npt.NDArray
+    paths: typing.Optional[typing.Iterable[miot.PathLike]] = None
+
+    def __len__(self) -> builtins.int:
+        length = len(self.slices)
+        if self.paths is not None:
+            assert length == len(list(self.paths))
+        return length
+
+    @classmethod
+    def from_datasets(
+        cls: typing.Type[DICOMDir],
+        datasets: typing.List[pydicom.Dataset],
+        *,
+        paths: typing.Optional[typing.Iterable[miot.PathLike]] = None,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        remove_anomalous_images: builtins.bool = True,
+    ) -> DICOMDir:
+        if not datasets:
+            msg = "Must provide at least one image DICOM dataset"
+            raise mioe.DicomImportException(msg)
+        sorted_slices = SortedSlices.from_datasets(datasets)
+        sorted_slices.check_nonuniformity(
+            max_nonuniformity=max_nonuniformity,
+            fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
+        )
+        positions = list(sorted(sorted_slices.positions))
+        dicom_dir = cls(
+            slices=sorted_slices.slices,
+            positions=positions,
+            spacing=sorted_slices.slice_spacing,
+            affine=sorted_slices.affine,
+            paths=paths,
+        )
+        if remove_anomalous_images:
+            dicom_dir = dicom_dir.remove_anomalous_image_paths()
+        return dicom_dir
+
+    @classmethod
+    def from_path(
+        cls: typing.Type[DICOMDir],
+        dicom_path: typing.Union[miot.PathLike, typing.Iterable[miot.PathLike]],
+        *,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        remove_anomalous_images: builtins.bool = True,
+    ) -> DICOMDir:
+        image_paths: typing.Iterable[miot.PathLike]
+        if (
+            isinstance(dicom_path, (builtins.str, pathlib.Path))
+            and (_dcm_dir := pathlib.Path(dicom_path)).is_dir()
         ):
-            # TODO: figure out how we should handle non-even slice spacing
-            msg = f"The slice spacing is non-uniform. Slice spacings:\n{slice_positions_diffs}"
-            logger.warning(msg)
-
-        if not np.allclose(
-            slice_positions_diffs, slice_positions_diffs[0], atol=0, rtol=1e-1
+            image_paths = list(sorted(_dcm_dir.glob("*.dcm")))
+        elif (
+            not isinstance(dicom_path, (builtins.str, pathlib.Path))
+            and miou.is_iterable(dicom_path)
+            and all(str(p).endswith(".dcm") for p in dicom_path)  # type: ignore[union-attr]
         ):
-            raise DicomImportException("It appears there are missing slices")
+            image_paths = dicom_path  # type: ignore[assignment]
+        else:
+            raise ValueError("dicom_dir must be path to a dir. or a list of dcm paths")
+        images = [
+            img
+            for path in image_paths
+            if cls._is_dicomdir(img := pydicom.dcmread(path))
+        ]
+        return cls.from_datasets(
+            typing.cast(typing.List[pydicom.Dataset], images),
+            paths=image_paths,
+            max_nonuniformity=max_nonuniformity,
+            fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
+            remove_anomalous_images=remove_anomalous_images,
+        )
+
+    def remove_anomalous_image_paths(self) -> DICOMDir:
+        orientations = [tuple(img.ImageOrientationPatient) for img in self.slices]
+        unique_orientations, counts = np.unique(
+            orientations, axis=0, return_counts=True
+        )
+        most_common_orientation = tuple(unique_orientations[np.argmax(counts)])
+        paths = ([None] * len(self)) if (no_paths := self.paths is None) else self.paths
+        out = [
+            (img, path)
+            for img, path, o in zip(self.slices, paths, orientations)  # type: ignore[arg-type]
+            if o == most_common_orientation
+        ]
+        new_images, new_image_paths = miou.unzip(out)
+        return DICOMDir(
+            slices=new_images,
+            positions=self.positions,
+            spacing=self.spacing,
+            affine=self.affine,
+            paths=None if no_paths else new_image_paths,
+        )
+
+    def validate(self) -> None:
+        invariant_properties = frozenset(
+            [
+                "Modality",
+                "SOPClassUID",
+                "SeriesInstanceUID",
+                "Rows",
+                "Columns",
+                "SamplesPerPixel",
+                "PixelSpacing",
+                "PixelRepresentation",
+                "BitsAllocated",
+            ]
+        )
+        for property_name in invariant_properties:
+            self._slice_attribute_equal(property_name)
+        self._slice_ndarray_attribute_almost_equal(
+            "ImageOrientationPatient", abs_tol=1e-5
+        )
+
+    def _slice_attribute_equal(self, property_name: builtins.str) -> None:
+        initial_value = getattr(self.slices[0], property_name, None)
+        for dataset in self.slices[1:]:
+            value = getattr(dataset, property_name, None)
+            if value != initial_value:
+                msg = f'All slices must have the same value for "{property_name}": {value} != {initial_value}'
+                raise mioe.DicomImportException(msg)
+
+    def _slice_ndarray_attribute_almost_equal(
+        self,
+        property_name: builtins.str,
+        *,
+        abs_tol: builtins.float,
+    ) -> None:
+        initial_value = getattr(self.slices[0], property_name, None)
+        for dataset in self.slices[1:]:
+            value = getattr(dataset, property_name, None)
+            if not np.allclose(value, initial_value, atol=abs_tol):
+                msg = (
+                    f'All slices must have the same value for "{property_name}" within "{abs_tol}": {value} != '
+                    f"{initial_value}"
+                )
+                raise mioe.DicomImportException(msg)
+
+    @staticmethod
+    def _is_dicomdir(dataset: pydicom.Dataset) -> builtins.bool:
+        media_sop_class: str = getattr(dataset, "MediaStorageSOPClassUID", None)
+        result: builtins.bool = media_sop_class == "1.2.840.10008.1.3.10"
+        return result
 
 
-def _slice_spacing(slice_datasets: typing.List[pydicom.Dataset]) -> npt.NDArray:
-    spacing: npt.NDArray
-    if len(slice_datasets) > 1:
-        slice_positions = _slice_positions(slice_datasets)
-        slice_positions_diffs = np.diff(sorted(slice_positions))
-        spacing = np.median(slice_positions_diffs)
-    elif len(slice_datasets) == 1:
-        spacing = getattr(slice_datasets[0], "SpacingBetweenSlices", 0)
-    else:
-        raise RuntimeError("slice_datasets must contain at least one dicom image")
-    return spacing
+@dataclasses.dataclass(frozen=True)
+class DICOMImage:
+    data: npt.NDArray
+    affine: npt.NDArray
+    paths: typing.Optional[typing.Iterable[miot.PathLike]] = None
+    info: typing.Optional[typing.Any] = None
+
+    def __array__(self, dtype: typing.Optional[npt.DTypeLike] = None) -> npt.NDArray:
+        return np.asarray(self.data, dtype=dtype)
+
+    @classmethod
+    def from_dicomdir(
+        cls: typing.Type[DICOMImage],
+        dicom_dir: DICOMDir,
+        *,
+        rescale: typing.Optional[builtins.bool] = None,
+        rescale_dtype: npt.DTypeLike = np.float32,
+    ) -> DICOMImage:
+        data = cls._merge_slice_pixel_arrays(
+            dicom_dir.slices, rescale=rescale, rescale_dtype=rescale_dtype
+        )
+        return cls(data=data, affine=dicom_dir.affine, paths=dicom_dir.paths, info=None)
+
+    @classmethod
+    def from_path(
+        cls: typing.Type[DICOMImage],
+        dicom_path: typing.Iterable[miot.PathLike],
+        *,
+        rescale: typing.Optional[builtins.bool] = None,
+        rescale_dtype: npt.DTypeLike = np.float32,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        remove_anomalous_images: builtins.bool = True,
+    ) -> DICOMImage:
+        dicom_dir = DICOMDir.from_path(
+            dicom_path,
+            max_nonuniformity=max_nonuniformity,
+            fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
+            remove_anomalous_images=remove_anomalous_images,
+        )
+        return cls.from_dicomdir(
+            dicom_dir, rescale=rescale, rescale_dtype=rescale_dtype
+        )
+
+    @classmethod
+    def from_zipped_stream(
+        cls: typing.Type[DICOMImage],
+        data_stream: io.BytesIO,
+        *,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        remove_anomalous_images: builtins.bool = True,
+        rescale: typing.Optional[builtins.bool] = None,
+        rescale_dtype: npt.DTypeLike = np.float32,
+    ) -> DICOMImage:
+        with zipfile.ZipFile(data_stream, mode="r") as zf:
+            datasets = cls.dicom_datasets_from_zip(zf)
+        dicomdir = DICOMDir.from_datasets(
+            datasets,
+            max_nonuniformity=max_nonuniformity,
+            fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
+            remove_anomalous_images=remove_anomalous_images,
+        )
+        return cls.from_dicomdir(dicomdir, rescale=rescale, rescale_dtype=rescale_dtype)
+
+    @staticmethod
+    def dicom_datasets_from_zip(
+        zip_file: zipfile.ZipFile,
+    ) -> typing.List[pydicom.Dataset]:
+        datasets: typing.List[pydicom.Dataset] = []
+        for name in zip_file.namelist():
+            if name.endswith("/"):
+                continue  # skip directories
+            with zip_file.open(name, mode="r") as f:
+                try:
+                    dataset = pydicom.dcmread(f)  # type: ignore[arg-type]
+                    datasets.append(dataset)
+                except pydicom.errors.InvalidDicomError as e:
+                    msg = f"Skipping invalid DICOM file '{name}': {e}"
+                    logger.info(msg)
+
+        if not datasets:
+            msg = "Zipfile does not contain any valid DICOM files"
+            raise mioe.DicomImportException(msg)
+
+        return datasets
+
+    @classmethod
+    def _merge_slice_pixel_arrays(
+        cls,
+        slices: typing.List[pydicom.Dataset],
+        *,
+        rescale: typing.Optional[builtins.bool] = None,
+        rescale_dtype: npt.DTypeLike = np.float32,
+    ) -> npt.NDArray:
+        if rescale is None:
+            rescale = any(cls._requires_rescaling(d) for d in slices)
+
+        first_dataset = slices[0]
+        slice_dtype = first_dataset.pixel_array.dtype
+        slice_shape = first_dataset.pixel_array.T.shape
+        num_slices = len(slices)
+
+        voxels_shape = slice_shape + (num_slices,)
+        voxels_dtype = rescale_dtype if rescale else slice_dtype
+        voxels = np.empty(voxels_shape, dtype=voxels_dtype, order="F")
+
+        for k, dataset in enumerate(slices):
+            pixel_array = dataset.pixel_array.T
+            if rescale:
+                slope = float(getattr(dataset, "RescaleSlope", 1))
+                intercept = float(getattr(dataset, "RescaleIntercept", 0))
+                pixel_array = pixel_array.astype(np.float32) * slope + intercept
+            voxels[..., k] = pixel_array
+
+        return voxels
+
+    @staticmethod
+    def _requires_rescaling(dataset: pydicom.Dataset) -> builtins.bool:
+        return hasattr(dataset, "RescaleSlope") or hasattr(dataset, "RescaleIntercept")
