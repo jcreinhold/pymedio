@@ -14,6 +14,7 @@ isort==5.9.3
 bandit==1.7.1
 mypy==0.910
 
-nibabel>=3
-numpy>=1.21
-SimpleITK~=2.1.0
+nibabel~=3.2.1
+numpy~=1.21.4
+pydicom~=2.2.2
+SimpleITK~=2.1.1

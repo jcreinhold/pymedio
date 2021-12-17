@@ -47,40 +47,36 @@ class Cosines:
 
     def validate(self) -> None:
         dot_prod = float(np.dot(self.row, self.column).item())
-        if not self._almost_zero(dot_prod, abs_tol=1e-4):
+        if not self._almost_zero(dot_prod, atol=1e-4):
             msg = f"Non-orthogonal direction cosines: {self.row}, {self.column}"
             raise mioe.DicomImportException(msg)
-        elif not self._almost_zero(dot_prod, abs_tol=1e-8):
+        elif not self._almost_zero(dot_prod, atol=1e-8):
             msg = f"Direction cosines aren't quite ortho.: {self.row}, {self.column}"
             warnings.warn(msg)
 
         row_cosine_norm = float(np.linalg.norm(self.row).item())
-        if not self._almost_one(row_cosine_norm, abs_tol=1e-4):
-            msg = f"The row direction cosine's magnitude is not 1: {self.row}"
+        if not self._almost_one(row_cosine_norm, atol=1e-4):
+            msg = f"Row direction cosine's magnitude is not 1: {self.row}"
             raise mioe.DicomImportException(msg)
-        elif not self._almost_one(row_cosine_norm, abs_tol=1e-8):
-            msg = f"The row direction cosine's magnitude is not quite 1: {self.row}"
+        elif not self._almost_one(row_cosine_norm, atol=1e-8):
+            msg = f"Row direction cosine's magnitude is not quite 1: {self.row}"
             warnings.warn(msg)
 
         column_cosine_norm = float(np.linalg.norm(self.column).item())
-        if not self._almost_one(column_cosine_norm, abs_tol=1e-4):
-            msg = f"The column direction cosine's magnitude is not 1: {self.column}"
+        if not self._almost_one(column_cosine_norm, atol=1e-4):
+            msg = f"Column direction cosine's magnitude is not 1: {self.column}"
             raise mioe.DicomImportException(msg)
-        elif not self._almost_one(column_cosine_norm, abs_tol=1e-8):
-            msg = (
-                f"The column direction cosine's magnitude is not quite 1: {self.column}"
-            )
+        elif not self._almost_one(column_cosine_norm, atol=1e-8):
+            msg = f"Column direction cosine's magnitude is not quite 1: {self.column}"
             warnings.warn(msg)
 
     @staticmethod
-    def _almost_zero(
-        value: builtins.float, *, abs_tol: builtins.float
-    ) -> builtins.bool:
-        return math.isclose(value, 0.0, abs_tol=abs_tol)
+    def _almost_zero(value: builtins.float, *, atol: builtins.float) -> builtins.bool:
+        return math.isclose(value, 0.0, abs_tol=atol)
 
     @staticmethod
-    def _almost_one(value: builtins.float, *, abs_tol: builtins.float) -> builtins.bool:
-        return math.isclose(value, 1.0, abs_tol=abs_tol)
+    def _almost_one(value: builtins.float, *, atol: builtins.float) -> builtins.bool:
+        return math.isclose(value, 1.0, abs_tol=atol)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -104,9 +100,8 @@ class SortedSlices:
         assert slice_datasets, "slice_datasets empty"
         image_orientation = slice_datasets[0].ImageOrientationPatient
         cosines = Cosines.from_orientation(image_orientation)
-        positions = [
-            np.dot(cosines.slice, d.ImagePositionPatient).item() for d in slice_datasets
-        ]
+        cs = cosines.slice
+        positions = [np.dot(cs, d.ImagePositionPatient).item() for d in slice_datasets]
         _sorted = sorted(enumerate(positions), key=operator.itemgetter(1))
         sorted_indices, sorted_positions = miou.unzip(_sorted)
         sorted_slice_datasets = [slice_datasets[i] for i in sorted_indices]
@@ -124,11 +119,9 @@ class SortedSlices:
         fail_outside_max_nonuniformity: bool = True,
     ) -> None:
         if len(self) > 1:
-            pos_diffs = np.diff(self.positions)
-            if not np.allclose(
-                pos_diffs, pos_diffs[0], atol=0.0, rtol=max_nonuniformity
-            ):
-                msg = f"The slice spacing is non-uniform. Slice spacings:\n{pos_diffs}"
+            diffs = np.diff(self.positions)
+            if not np.allclose(diffs, diffs[0], atol=0.0, rtol=max_nonuniformity):
+                msg = f"The slice spacing is non-uniform. Slice spacings:\n{diffs}"
                 if fail_outside_max_nonuniformity:
                     raise mioe.OutsideMaxNonUniformity(msg)
                 else:
@@ -237,6 +230,43 @@ class DICOMDir:
             remove_anomalous_images=remove_anomalous_images,
         )
 
+    @classmethod
+    def from_zipped_stream(
+        cls: typing.Type[DICOMDir],
+        data_stream: io.BytesIO,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        remove_anomalous_images: builtins.bool = True,
+    ) -> DICOMDir:
+        with zipfile.ZipFile(data_stream, mode="r") as zf:
+            datasets = cls.dicom_datasets_from_zip(zf)
+        return cls.from_datasets(
+            datasets,
+            max_nonuniformity=max_nonuniformity,
+            fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
+            remove_anomalous_images=remove_anomalous_images,
+        )
+
+    @staticmethod
+    def dicom_datasets_from_zip(
+        zip_file: zipfile.ZipFile,
+    ) -> typing.List[pydicom.Dataset]:
+        datasets: typing.List[pydicom.Dataset] = []
+        for name in zip_file.namelist():
+            if name.endswith("/"):
+                continue  # skip directories
+            with zip_file.open(name, mode="r") as f:
+                try:
+                    dataset = pydicom.dcmread(f)  # type: ignore[arg-type]
+                    datasets.append(dataset)
+                except pydicom.errors.InvalidDicomError as e:
+                    msg = f"Skipping invalid DICOM file '{name}': {e}"
+                    logger.info(msg)
+        if not datasets:
+            msg = "Zipfile does not contain any valid DICOM files"
+            raise mioe.DicomImportException(msg)
+        return datasets
+
     def remove_anomalous_image_paths(self) -> DICOMDir:
         orientations = [tuple(img.ImageOrientationPatient) for img in self.slices]
         unique_orientations, counts = np.unique(
@@ -274,32 +304,29 @@ class DICOMDir:
         )
         for property_name in invariant_properties:
             self._slice_attribute_equal(property_name)
-        self._slice_ndarray_attribute_almost_equal(
-            "ImageOrientationPatient", abs_tol=1e-5
-        )
+        self._slice_ndarray_attribute_almost_equal("ImageOrientationPatient", atol=1e-5)
 
     def _slice_attribute_equal(self, property_name: builtins.str) -> None:
         initial_value = getattr(self.slices[0], property_name, None)
         for dataset in self.slices[1:]:
             value = getattr(dataset, property_name, None)
             if value != initial_value:
-                msg = f'All slices must have the same value for "{property_name}": {value} != {initial_value}'
+                msg = "All slices must have the same value for "
+                msg += f"'{property_name}': {value} != {initial_value}"
                 raise mioe.DicomImportException(msg)
 
     def _slice_ndarray_attribute_almost_equal(
         self,
         property_name: builtins.str,
         *,
-        abs_tol: builtins.float,
+        atol: builtins.float,
     ) -> None:
         initial_value = getattr(self.slices[0], property_name, None)
         for dataset in self.slices[1:]:
             value = getattr(dataset, property_name, None)
-            if not np.allclose(value, initial_value, atol=abs_tol):
-                msg = (
-                    f'All slices must have the same value for "{property_name}" within "{abs_tol}": {value} != '
-                    f"{initial_value}"
-                )
+            if not np.allclose(value, initial_value, atol=atol):
+                msg = "All slices must have the same value for "
+                msg += f"'{property_name}' within '{atol}': {value} != {initial_value}"
                 raise mioe.DicomImportException(msg)
 
     @staticmethod
@@ -343,15 +370,13 @@ class DICOMImage:
         fail_outside_max_nonuniformity: bool = True,
         remove_anomalous_images: builtins.bool = True,
     ) -> DICOMImage:
-        dicom_dir = DICOMDir.from_path(
+        dicomdir = DICOMDir.from_path(
             dicom_path,
             max_nonuniformity=max_nonuniformity,
             fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
             remove_anomalous_images=remove_anomalous_images,
         )
-        return cls.from_dicomdir(
-            dicom_dir, rescale=rescale, rescale_dtype=rescale_dtype
-        )
+        return cls.from_dicomdir(dicomdir, rescale=rescale, rescale_dtype=rescale_dtype)
 
     @classmethod
     def from_zipped_stream(
@@ -364,37 +389,13 @@ class DICOMImage:
         rescale: typing.Optional[builtins.bool] = None,
         rescale_dtype: npt.DTypeLike = np.float32,
     ) -> DICOMImage:
-        with zipfile.ZipFile(data_stream, mode="r") as zf:
-            datasets = cls.dicom_datasets_from_zip(zf)
-        dicomdir = DICOMDir.from_datasets(
-            datasets,
+        dicomdir = DICOMDir.from_zipped_stream(
+            data_stream,
             max_nonuniformity=max_nonuniformity,
             fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
             remove_anomalous_images=remove_anomalous_images,
         )
         return cls.from_dicomdir(dicomdir, rescale=rescale, rescale_dtype=rescale_dtype)
-
-    @staticmethod
-    def dicom_datasets_from_zip(
-        zip_file: zipfile.ZipFile,
-    ) -> typing.List[pydicom.Dataset]:
-        datasets: typing.List[pydicom.Dataset] = []
-        for name in zip_file.namelist():
-            if name.endswith("/"):
-                continue  # skip directories
-            with zip_file.open(name, mode="r") as f:
-                try:
-                    dataset = pydicom.dcmread(f)  # type: ignore[arg-type]
-                    datasets.append(dataset)
-                except pydicom.errors.InvalidDicomError as e:
-                    msg = f"Skipping invalid DICOM file '{name}': {e}"
-                    logger.info(msg)
-
-        if not datasets:
-            msg = "Zipfile does not contain any valid DICOM files"
-            raise mioe.DicomImportException(msg)
-
-        return datasets
 
     @classmethod
     def _merge_slice_pixel_arrays(
@@ -417,15 +418,29 @@ class DICOMImage:
         voxels = np.empty(voxels_shape, dtype=voxels_dtype, order="F")
 
         for k, dataset in enumerate(slices):
-            pixel_array = dataset.pixel_array.T
+            pixel_array = dataset.pixel_array.T.astype(voxels_dtype)
             if rescale:
-                slope = float(getattr(dataset, "RescaleSlope", 1))
-                intercept = float(getattr(dataset, "RescaleIntercept", 0))
-                pixel_array = pixel_array.astype(np.float32) * slope + intercept
+                slope = float(getattr(dataset, "RescaleSlope", 1.0))
+                intercept = float(getattr(dataset, "RescaleIntercept", 0.0))
+                if slope != 1.0:
+                    pixel_array *= slope
+                if intercept != 0.0:
+                    pixel_array += intercept
             voxels[..., k] = pixel_array
 
+        assert voxels.dtype == voxels_dtype
         return voxels
 
     @staticmethod
     def _requires_rescaling(dataset: pydicom.Dataset) -> builtins.bool:
         return hasattr(dataset, "RescaleSlope") or hasattr(dataset, "RescaleIntercept")
+
+    def to_npz(self, file: typing.Union[miot.PathLike, builtins.bytes]) -> None:
+        np.savez_compressed(file, data=self.data, affine=self.affine)
+
+    @classmethod
+    def from_npz(
+        cls: typing.Type[DICOMImage], file: typing.Union[miot.PathLike, builtins.bytes]
+    ) -> DICOMImage:
+        _data = np.load(file)
+        return cls(data=_data["data"], affine=_data["affine"])

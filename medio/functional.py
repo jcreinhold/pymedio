@@ -15,7 +15,9 @@ __all__ = [
 import builtins
 import gzip
 import io
+import logging
 import pathlib
+import traceback
 import typing
 import warnings
 
@@ -33,6 +35,8 @@ FLIPXY_44 = np.diag([-1, -1, 1, 1])
 # Image formats that are typically 2D
 _2d_formats = [".jpg", ".jpeg", ".bmp", ".png", ".tif", ".tiff"]
 IMAGE_2D_FORMATS = _2d_formats + [s.upper() for s in _2d_formats]
+
+logger = logging.getLogger(__name__)
 
 
 def read_image(
@@ -64,13 +68,13 @@ def read_image_from_stream(
 ) -> miot.DataAffine:
     _stream = gzip.GzipFile(fileobj=stream) if gzipped else stream
     fh = nib.FileHolder(fileobj=_stream)
-    for cls in nib.allimageclasses:
+    for cls in nib.imageclasses.all_image_classes:
         if hasattr(cls, "from_file_map"):
             try:
                 img = cls.from_file_map({"header": fh, "image": fh})
                 break
             except Exception:
-                continue
+                logger.debug(traceback.format_exc())
     else:
         raise RuntimeError("Couldn't open data stream.")
     data = img.get_fdata(dtype=dtype)
@@ -360,8 +364,6 @@ def sitk_to_nib(
     array_view = sitk.GetArrayViewFromImage(image)
     data = np.asarray(array_view, dtype=dtype).transpose()
     num_components = image.GetNumberOfComponentsPerPixel()
-    if num_components == 1:
-        data = data[np.newaxis]  # add channels dimension
     input_spatial_dims = image.GetDimension()
     if input_spatial_dims == 2:
         data = data[..., np.newaxis]
@@ -440,13 +442,14 @@ def get_sitk_metadata_from_ras_affine(
 def ensure_4d(
     array: npt.NDArray, *, num_spatial_dims: typing.Optional[builtins.int] = None
 ) -> np.ndarray:
+    """for PyTorch"""
     num_dimensions = array.ndim
     if num_dimensions == 4:
         pass
     elif num_dimensions == 5:  # hope (W, H, D, 1, C)
         if array.shape[-2] == 1:
             array = array[..., 0, :]
-            array = array.transpose(3, 0, 1, 2)
+            array = array.transpose((3, 0, 1, 2))
         else:
             raise ValueError("5D is not supported for shape[-2] > 1")
     elif num_dimensions == 2:  # assume 2D monochannel (W, H)
@@ -461,7 +464,7 @@ def ensure_4d(
             maybe_rgb = 3 in (shape[0], shape[-1])
             if maybe_rgb:
                 if shape[-1] == 3:  # (W, H, 3)
-                    array = array.transpose(2, 0, 1)  # (3, W, H)
+                    array = array.transpose((2, 0, 1))  # (3, W, H)
                 array = array[..., np.newaxis]  # (3, W, H, 1)
             else:  # (W, H, D)
                 array = array[np.newaxis]  # (1, W, H, D)
