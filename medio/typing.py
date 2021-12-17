@@ -3,6 +3,7 @@ Author: Jacob Reinhold <jcreinhold@gmail.com>
 """
 
 import builtins
+import collections
 import os
 import typing
 
@@ -28,3 +29,9 @@ Direction3D = typing.Tuple[
     builtins.float,
 ]
 Direction = typing.Union[Direction2D, Direction3D]
+
+DICOMDir = collections.namedtuple("DICOMDir", ["data", "paths"])
+ImageShape = collections.namedtuple("ImageShape", ["h", "w", "d"])
+SortedSlices = collections.namedtuple(
+    "SortedSlices", ["slices", "indices", "positions"]
+)
