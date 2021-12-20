@@ -5,10 +5,14 @@ Author: Jacob Reinhold <jcreinhold@gmail.com>
 
 from __future__ import annotations
 
+__all__ = [
+    "DICOMDir",
+    "DICOMImage",
+]
+
 import builtins
 import dataclasses
 import functools
-import io
 import logging
 import math
 import operator
@@ -21,6 +25,7 @@ import numpy as np
 import numpy.typing as npt
 import pydicom
 
+import medio.base as miob
 import medio.exceptions as mioe
 import medio.typing as miot
 import medio.utils as miou
@@ -38,8 +43,8 @@ class Cosines:
     def from_orientation(
         cls: typing.Type[Cosines], image_orientation: typing.List[builtins.float]
     ) -> Cosines:
-        row_cosine = np.asarray(image_orientation[:3])
-        column_cosine = np.asarray(image_orientation[3:])
+        row_cosine = np.asanyarray(image_orientation[:3])
+        column_cosine = np.asanyarray(image_orientation[3:])
         slice_cosine = np.cross(row_cosine, column_cosine)
         cosines = cls(row_cosine, column_cosine, slice_cosine)
         cosines.validate()
@@ -217,11 +222,7 @@ class DICOMDir:
             image_paths = dicom_path  # type: ignore[assignment]
         else:
             raise ValueError("dicom_dir must be path to a dir. or a list of dcm paths")
-        images = [
-            img
-            for path in image_paths
-            if cls._is_dicomdir(img := pydicom.dcmread(path))
-        ]
+        images = [pydicom.dcmread(path) for path in image_paths]
         return cls.from_datasets(
             typing.cast(typing.List[pydicom.Dataset], images),
             paths=image_paths,
@@ -233,12 +234,14 @@ class DICOMDir:
     @classmethod
     def from_zipped_stream(
         cls: typing.Type[DICOMDir],
-        data_stream: io.BytesIO,
+        data_stream: typing.BinaryIO,
+        *,
         max_nonuniformity: float = 5e-4,
         fail_outside_max_nonuniformity: bool = True,
         remove_anomalous_images: builtins.bool = True,
+        **zip_kwargs: typing.Any,
     ) -> DICOMDir:
-        with zipfile.ZipFile(data_stream, mode="r") as zf:
+        with zipfile.ZipFile(data_stream, mode="r", **zip_kwargs) as zf:
             datasets = cls.dicom_datasets_from_zip(zf)
         return cls.from_datasets(
             datasets,
@@ -336,16 +339,7 @@ class DICOMDir:
         return result
 
 
-@dataclasses.dataclass(frozen=True)
-class DICOMImage:
-    data: npt.NDArray
-    affine: npt.NDArray
-    paths: typing.Optional[typing.Iterable[miot.PathLike]] = None
-    info: typing.Optional[typing.Any] = None
-
-    def __array__(self, dtype: typing.Optional[npt.DTypeLike] = None) -> npt.NDArray:
-        return np.asarray(self.data, dtype=dtype)
-
+class DICOMImage(miob.ImageBase):
     @classmethod
     def from_dicomdir(
         cls: typing.Type[DICOMImage],
@@ -357,12 +351,12 @@ class DICOMImage:
         data = cls._merge_slice_pixel_arrays(
             dicom_dir.slices, rescale=rescale, rescale_dtype=rescale_dtype
         )
-        return cls(data=data, affine=dicom_dir.affine, paths=dicom_dir.paths, info=None)
+        return cls(data=data, affine=dicom_dir.affine)
 
     @classmethod
     def from_path(
         cls: typing.Type[DICOMImage],
-        dicom_path: typing.Iterable[miot.PathLike],
+        dicom_path: typing.Union[miot.PathLike, typing.Iterable[miot.PathLike]],
         *,
         rescale: typing.Optional[builtins.bool] = None,
         rescale_dtype: npt.DTypeLike = np.float32,
@@ -381,7 +375,7 @@ class DICOMImage:
     @classmethod
     def from_zipped_stream(
         cls: typing.Type[DICOMImage],
-        data_stream: io.BytesIO,
+        data_stream: typing.BinaryIO,
         *,
         max_nonuniformity: float = 5e-4,
         fail_outside_max_nonuniformity: bool = True,
@@ -399,7 +393,7 @@ class DICOMImage:
 
     @classmethod
     def _merge_slice_pixel_arrays(
-        cls,
+        cls: typing.Type[DICOMImage],
         slices: typing.List[pydicom.Dataset],
         *,
         rescale: typing.Optional[builtins.bool] = None,
@@ -434,13 +428,3 @@ class DICOMImage:
     @staticmethod
     def _requires_rescaling(dataset: pydicom.Dataset) -> builtins.bool:
         return hasattr(dataset, "RescaleSlope") or hasattr(dataset, "RescaleIntercept")
-
-    def to_npz(self, file: typing.Union[miot.PathLike, builtins.bytes]) -> None:
-        np.savez_compressed(file, data=self.data, affine=self.affine)
-
-    @classmethod
-    def from_npz(
-        cls: typing.Type[DICOMImage], file: typing.Union[miot.PathLike, builtins.bytes]
-    ) -> DICOMImage:
-        _data = np.load(file)
-        return cls(data=_data["data"], affine=_data["affine"])
