@@ -1,4 +1,5 @@
 """Functions for reading medical images
+Taken from torchio and modified to output np.ndarray
 https://github.com/fepegar/torchio
 Author: Jacob Reinhold <jcreinhold@gmail.com>
 """
@@ -7,24 +8,27 @@ __all__ = [
     "read_affine",
     "read_image",
     "read_matrix",
-    "read_shape",
     "write_image",
     "write_matrix",
 ]
 
 import builtins
 import gzip
-import io
 import logging
 import pathlib
 import traceback
 import typing
 import warnings
 
-import nibabel as nib
 import numpy as np
 import numpy.typing as npt
-import SimpleITK as sitk
+
+try:
+    import nibabel as nib
+    import SimpleITK as sitk
+except (ModuleNotFoundError, ImportError) as e:
+    msg = f"nibabel and SimpleITK must be installed to use {__name__}."
+    raise RuntimeError(msg) from e
 
 import medio.typing as miot
 
@@ -35,6 +39,23 @@ FLIPXY_44 = np.diag([-1, -1, 1, 1])
 # Image formats that are typically 2D
 _2d_formats = [".jpg", ".jpeg", ".bmp", ".png", ".tif", ".tiff"]
 IMAGE_2D_FORMATS = _2d_formats + [s.upper() for s in _2d_formats]
+
+NibabelImageClass = typing.Type[
+    typing.Union[
+        nib.Nifti1Pair,
+        nib.Nifti1Image,
+        nib.Nifti2Pair,
+        nib.Cifti2Image,
+        nib.Nifti2Image,
+        nib.Spm2AnalyzeImage,
+        nib.Spm99AnalyzeImage,
+        nib.AnalyzeImage,
+        nib.Minc1Image,
+        nib.Minc2Image,
+        nib.MGHImage,
+        nib.GiftiImage,
+    ]
+]
 
 logger = logging.getLogger(__name__)
 
@@ -61,22 +82,27 @@ def read_image(
 
 
 def read_image_from_stream(
-    stream: io.BytesIO,
+    stream: typing.BinaryIO,
     *,
     dtype: npt.DTypeLike = np.float32,
     gzipped: builtins.bool = False,
+    image_class: typing.Optional[NibabelImageClass] = None,
 ) -> miot.DataAffine:
+    """https://mail.python.org/pipermail/neuroimaging/2017-February/001345.html"""
     _stream = gzip.GzipFile(fileobj=stream) if gzipped else stream
     fh = nib.FileHolder(fileobj=_stream)
-    for cls in nib.imageclasses.all_image_classes:
-        if hasattr(cls, "from_file_map"):
-            try:
-                img = cls.from_file_map({"header": fh, "image": fh})
-                break
-            except Exception:
-                logger.debug(traceback.format_exc())
+    if image_class is None:
+        for cls in nib.imageclasses.all_image_classes:
+            if hasattr(cls, "from_file_map"):
+                try:
+                    img = cls.from_file_map({"header": fh, "image": fh})
+                    break
+                except Exception:
+                    logger.debug(traceback.format_exc())
+        else:
+            raise RuntimeError("Couldn't open data stream.")
     else:
-        raise RuntimeError("Couldn't open data stream.")
+        img = image_class.from_file_map({"header": fh, "image": fh})
     data = img.get_fdata(dtype=dtype)
     if data.ndim == 5:
         data = data[..., 0, :]
@@ -88,7 +114,7 @@ def read_image_from_stream(
 def _read_nibabel(
     path: miot.PathLike, *, dtype: npt.DTypeLike = np.float32
 ) -> miot.DataAffine:
-    img = nib.load(str(path), mmap=False)
+    img = nib.load(str(path))
     data = img.get_fdata(dtype=dtype)
     if data.ndim == 5:
         data = data[..., 0, :]
@@ -104,7 +130,7 @@ def _read_sitk(
         image = _read_dicom_sitk(path)
     else:
         image = sitk.ReadImage(str(path))
-    data, affine = sitk_to_nib(image, dtype=dtype)
+    data, affine = sitk_to_array(image, dtype=dtype)
     return data, affine
 
 
@@ -186,9 +212,9 @@ def _write_nibabel(
         array = array[np.newaxis].permute(2, 3, 4, 0, 1)
     suffix = pathlib.Path(str(path).replace(".gz", "")).suffix
     if ".nii" in suffix:
-        img = nib.Nifti1Image(np.asarray(array), affine)
+        img = nib.Nifti1Image(np.asanyarray(array), affine)
     elif ".hdr" in suffix or ".img" in suffix:
-        img = nib.Nifti1Pair(np.asarray(array), affine)
+        img = nib.Nifti1Pair(np.asanyarray(array), affine)
     else:
         raise nib.loadsave.ImageFileError
     if num_components > 1:
@@ -206,7 +232,6 @@ def _write_sitk(
     use_compression: builtins.bool = True,
     squeeze: typing.Optional[builtins.bool] = None,
 ) -> None:
-    assert array.ndim == 4
     path = pathlib.Path(path)
     if path.suffix in (".png", ".jpg", ".jpeg", ".bmp"):
         warnings.warn(
@@ -218,7 +243,7 @@ def _write_sitk(
         force_3d = path.suffix not in IMAGE_2D_FORMATS
     else:
         force_3d = not squeeze
-    image = nib_to_sitk(array, affine, force_3d=force_3d)
+    image = array_to_sitk(array, affine, force_3d=force_3d)
     sitk.WriteImage(image, str(path), use_compression)
 
 
@@ -314,7 +339,7 @@ def get_rotation_and_spacing_from_affine(
     return rotation, spacing
 
 
-def nib_to_sitk(
+def array_to_sitk(
     array: npt.NDArray,
     affine: npt.NDArray,
     *,
@@ -330,8 +355,8 @@ def nib_to_sitk(
     # (c, w, h, 1)
     # (1, w, h, 1)
     # (c, w, h, d)
-    array = np.asarray(array)
-    affine = np.asarray(affine).astype(np.float64)
+    array = np.asanyarray(array)
+    affine = np.asanyarray(affine, dtype=np.float64)
 
     is_multichannel = array.shape[0] > 1 and not force_4d
     is_2d = array.shape[3] == 1 and not force_3d
@@ -358,11 +383,11 @@ def nib_to_sitk(
     return image
 
 
-def sitk_to_nib(
+def sitk_to_array(
     image: sitk.Image, *, dtype: npt.DTypeLike = np.float32
-) -> typing.Tuple[np.ndarray, np.ndarray]:
+) -> miot.DataAffine:
     array_view = sitk.GetArrayViewFromImage(image)
-    data = np.asarray(array_view, dtype=dtype).transpose()
+    data = np.asanyarray(array_view, dtype=dtype).transpose()
     num_components = image.GetNumberOfComponentsPerPixel()
     input_spatial_dims = image.GetDimension()
     if input_spatial_dims == 2:
@@ -379,10 +404,10 @@ def sitk_to_nib(
 
 def get_ras_affine_from_sitk(
     sitk_object: typing.Union[sitk.Image, sitk.ImageFileReader],
-) -> np.ndarray:
-    spacing = np.asarray(sitk_object.GetSpacing())
-    direction_lps = np.asarray(sitk_object.GetDirection())
-    origin_lps = np.asarray(sitk_object.GetOrigin())
+) -> npt.NDArray:
+    spacing = np.asanyarray(sitk_object.GetSpacing())
+    direction_lps = np.asanyarray(sitk_object.GetDirection())
+    origin_lps = np.asanyarray(sitk_object.GetOrigin())
     direction_length = len(direction_lps)
     if direction_length == 9:
         rotation_lps = direction_lps.reshape(3, 3)
@@ -441,7 +466,7 @@ def get_sitk_metadata_from_ras_affine(
 
 def ensure_4d(
     array: npt.NDArray, *, num_spatial_dims: typing.Optional[builtins.int] = None
-) -> np.ndarray:
+) -> npt.NDArray:
     """for PyTorch"""
     num_dimensions = array.ndim
     if num_dimensions == 4:
