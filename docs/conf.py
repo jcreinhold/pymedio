@@ -22,6 +22,13 @@ import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
+autodoc_mock_imports = [
+    "pydicom",
+    "nibabel",
+    "numpy",
+    "SimpleITK",
+]
+
 import medio
 
 # -- General configuration ---------------------------------------------
@@ -32,7 +39,10 @@ import medio
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ["sphinx.ext.autodoc", "sphinx.ext.viewcode"]
+extensions = ["sphinx.ext.autodoc", "sphinx.ext.napoleon", "sphinx.ext.viewcode"]
+
+# Use google docstring format
+napoleon_google_docstring = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]

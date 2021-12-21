@@ -52,28 +52,31 @@ class Cosines:
 
     def validate(self) -> None:
         dot_prod = float(np.dot(self.row, self.column).item())
-        if not self._almost_zero(dot_prod, atol=1e-4):
-            msg = f"Non-orthogonal direction cosines: {self.row}, {self.column}"
-            raise mioe.DicomImportException(msg)
-        elif not self._almost_zero(dot_prod, atol=1e-8):
-            msg = f"Direction cosines aren't quite ortho.: {self.row}, {self.column}"
-            warnings.warn(msg)
+        err_msg_dp = f"Non-orthogonal direction cosines: {self.row}, {self.column}"
+        warn_msg_dp = f"Direction cosines aren't quite ortho: {self.row}, {self.column}"
+        self._validate_value(dot_prod, err_msg_dp, warn_msg_dp, self._almost_zero)
 
         row_cosine_norm = float(np.linalg.norm(self.row).item())
-        if not self._almost_one(row_cosine_norm, atol=1e-4):
-            msg = f"Row direction cosine's magnitude is not 1: {self.row}"
-            raise mioe.DicomImportException(msg)
-        elif not self._almost_one(row_cosine_norm, atol=1e-8):
-            msg = f"Row direction cosine's magnitude is not quite 1: {self.row}"
-            warnings.warn(msg)
+        err_msg_rn = f"Row direction cosine's magnitude is not 1: {self.row}"
+        warn_msg_rn = f"Row direction cosine's magnitude not quite 1: {self.row}"
+        self._validate_value(row_cosine_norm, err_msg_rn, warn_msg_rn, self._almost_one)
 
-        column_cosine_norm = float(np.linalg.norm(self.column).item())
-        if not self._almost_one(column_cosine_norm, atol=1e-4):
-            msg = f"Column direction cosine's magnitude is not 1: {self.column}"
-            raise mioe.DicomImportException(msg)
-        elif not self._almost_one(column_cosine_norm, atol=1e-8):
-            msg = f"Column direction cosine's magnitude is not quite 1: {self.column}"
-            warnings.warn(msg)
+        col_cosine_norm = float(np.linalg.norm(self.column).item())
+        err_msg_cn = f"Column direction cosine's magnitude is not 1: {self.column}"
+        warn_msg_cn = f"Column direction cosine's magnitude not quite 1: {self.column}"
+        self._validate_value(col_cosine_norm, err_msg_cn, warn_msg_cn, self._almost_one)
+
+    def _validate_value(
+        self,
+        value: builtins.float,
+        err_msg: builtins.str,
+        warn_msg: builtins.str,
+        check_func: typing.Callable[..., builtins.bool],
+    ) -> None:
+        if not check_func(value, atol=1e-4):
+            raise mioe.DicomImportException(value, err_msg)
+        elif not check_func(value, atol=1e-8):
+            warnings.warn(warn_msg)
 
     @staticmethod
     def _almost_zero(value: builtins.float, *, atol: builtins.float) -> builtins.bool:
