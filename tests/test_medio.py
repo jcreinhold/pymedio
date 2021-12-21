@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 """Tests for `medio` package."""
 
 import builtins
@@ -7,7 +5,6 @@ import gzip
 import io
 import os
 import pathlib
-import typing
 import zipfile
 
 import nibabel as nib
@@ -18,6 +15,11 @@ from pydicom.data import get_testdata_file
 
 import medio.dicom as miod
 import medio.image as mioi
+
+try:
+    import torch
+except (ModuleNotFoundError, ImportError):
+    torch = None  # type: ignore[assignment]
 
 NUM_DUPLICATES = 2
 TEST_IMAGE_NAME = "CT_small.dcm"
@@ -49,7 +51,7 @@ def dicom_image(dicom_image_path: pathlib.Path) -> pydicom.Dataset:
 
 @pytest.fixture(scope="session")
 def nifti() -> nib.Nifti1Image:
-    data = np.random.randn(*NIFTI_IMAGE_SHAPE)
+    data = np.random.randn(*NIFTI_IMAGE_SHAPE).astype(np.float32)
     return nib.Nifti1Image(data, np.eye(4))
 
 
@@ -118,6 +120,11 @@ def zipped_nifti_gzipped_path(
     return zipped_path
 
 
+@pytest.fixture
+def image() -> mioi.Image:
+    return mioi.Image(np.zeros(NIFTI_IMAGE_SHAPE, dtype=np.float32))
+
+
 def test_dicomdir_from_path(dicom_image_dir: pathlib.Path) -> None:
     dcmdir = miod.DICOMDir.from_path(dicom_image_dir)
     dcmdir.validate()
@@ -182,3 +189,30 @@ def test_nifti_gzipped_image_from_zipped_stream(
             f, gzipped=True, image_class=nib.Nifti1Image
         )
     assert image.shape == NIFTI_IMAGE_SHAPE
+
+
+def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
+    image = miod.DICOMImage.from_path(dicom_image_dir)
+    assert image.shape == (TEST_IMAGE_SHAPE + (NUM_DUPLICATES,))
+    image += 1.0
+    assert isinstance(image, miod.DICOMImage)
+    image *= image
+    assert isinstance(image, miod.DICOMImage)
+    s = "DICOMImage(shape: (128, 128, 2); spacing: (0.66, 0.66, 0.00); dtype: float32)"
+    assert str(image) == s
+
+
+def test_numpy_ufuncs_on_image(image: mioi.Image) -> None:
+    image += 1.0
+    assert np.all(image == 1.0)
+    assert isinstance(image, mioi.Image)
+    image *= image
+    assert np.all(image == 1.0)
+    assert isinstance(image, mioi.Image)
+    s = "Image(shape: (1, 1, 1); spacing: (1.00, 1.00, 1.00); dtype: float32; orientation: RAS+)"
+    assert str(image) == s
+
+
+@pytest.mark.skipif(torch is None, reason="Requires torch")
+def test_convert_to_torch(image: mioi.Image) -> None:
+    torch.as_tensor(image.torch_compatible())

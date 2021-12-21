@@ -26,15 +26,12 @@ import numpy.typing as npt
 try:
     import nibabel as nib
     import SimpleITK as sitk
-except (ModuleNotFoundError, ImportError) as e:
-    msg = f"nibabel and SimpleITK must be installed to use {__name__}."
-    raise RuntimeError(msg) from e
+except (ModuleNotFoundError, ImportError) as exn:
+    msg = f"NiBabel and SimpleITK must be installed to use {__name__}."
+    raise RuntimeError(msg) from exn
 
 import medio.typing as miot
-
-# Matrices used to switch between LPS and RAS
-FLIPXY_33 = np.diag([-1, -1, 1])
-FLIPXY_44 = np.diag([-1, -1, 1, 1])
+import medio.utils as miou
 
 # Image formats that are typically 2D
 _2d_formats = [".jpg", ".jpeg", ".bmp", ".png", ".tif", ".tiff"]
@@ -61,23 +58,26 @@ logger = logging.getLogger(__name__)
 
 
 def read_image(
-    path: miot.PathLike, *, dtype: npt.DTypeLike = np.float32
+    path: miot.PathLike,
+    *,
+    dtype: npt.DTypeLike = np.float32,
+    mmap: builtins.bool = False,
 ) -> miot.DataAffine:
     try:
         result = _read_sitk(path, dtype=dtype)
-    except RuntimeError as e:  # try with NiBabel
-        message = f"Error loading image with SimpleITK:\n{e}\n\nTrying NiBabel..."
+    except RuntimeError as exn1:  # try with NiBabel
+        message = f"Error loading image with SimpleITK:\n{exn1}\n\nTrying NiBabel..."
         warnings.warn(message)
         try:
-            result = _read_nibabel(path, dtype=dtype)
-        except nib.loadsave.ImageFileError as e:
+            result = _read_nibabel(path, dtype=dtype, mmap=mmap)
+        except nib.loadsave.ImageFileError as exn2:
             message = (
                 f"File '{path}' not understood."
                 " Check supported formats by at"
                 " https://simpleitk.readthedocs.io/en/master/IO.html#images"
                 " and https://nipy.org/nibabel/api.html#file-formats"
             )
-            raise RuntimeError(message) from e
+            raise RuntimeError(message) from exn2
     return result
 
 
@@ -95,14 +95,14 @@ def read_image_from_stream(
         for cls in nib.imageclasses.all_image_classes:
             if hasattr(cls, "from_file_map"):
                 try:
-                    img = cls.from_file_map({"header": fh, "image": fh})
+                    img = cls.from_file_map({"header": fh, "image": fh}, mmap=False)
                     break
                 except Exception:
                     logger.debug(traceback.format_exc())
         else:
             raise RuntimeError("Couldn't open data stream.")
     else:
-        img = image_class.from_file_map({"header": fh, "image": fh})
+        img = image_class.from_file_map({"header": fh, "image": fh}, mmap=False)
     data = img.get_fdata(dtype=dtype)
     if data.ndim == 5:
         data = data[..., 0, :]
@@ -112,9 +112,12 @@ def read_image_from_stream(
 
 
 def _read_nibabel(
-    path: miot.PathLike, *, dtype: npt.DTypeLike = np.float32
+    path: miot.PathLike,
+    *,
+    dtype: npt.DTypeLike = np.float32,
+    mmap: builtins.bool = False,
 ) -> miot.DataAffine:
-    img = nib.load(str(path))
+    img = nib.load(str(path), mmap=mmap)
     data = img.get_fdata(dtype=dtype)
     if data.ndim == 5:
         data = data[..., 0, :]
@@ -272,16 +275,18 @@ def write_matrix(matrix: npt.NDArray, path: miot.PathLike) -> None:
 
 def _to_itk_convention(matrix: npt.NDArray) -> npt.NDArray:
     """RAS to LPS"""
-    matrix = np.dot(FLIPXY_44, matrix)
-    matrix = np.dot(matrix, FLIPXY_44)
+    _flipxy_44 = miou.flipxy_44()
+    matrix = np.dot(_flipxy_44, matrix)
+    matrix = np.dot(matrix, _flipxy_44)
     matrix = np.linalg.inv(matrix)
     return matrix
 
 
 def _from_itk_convention(matrix: npt.NDArray) -> npt.NDArray:
     """LPS to RAS"""
-    matrix = np.dot(matrix, FLIPXY_44)
-    matrix = np.dot(FLIPXY_44, matrix)
+    _flipxy_44 = miou.flipxy_44()
+    matrix = np.dot(matrix, _flipxy_44)
+    matrix = np.dot(_flipxy_44, matrix)
     matrix = np.linalg.inv(matrix)
     return matrix
 
@@ -329,16 +334,6 @@ def _write_niftyreg_matrix(matrix: npt.NDArray, txt_path: miot.PathLike) -> None
     np.savetxt(txt_path, matrix, fmt="%.8f")
 
 
-def get_rotation_and_spacing_from_affine(
-    affine: npt.NDArray,
-) -> typing.Tuple[npt.NDArray, npt.NDArray]:
-    # From https://github.com/nipy/nibabel/blob/master/nibabel/orientations.py
-    rotation_zoom = affine[:3, :3]
-    spacing = np.sqrt(np.sum(rotation_zoom * rotation_zoom, axis=0))
-    rotation = rotation_zoom / spacing
-    return rotation, spacing
-
-
 def array_to_sitk(
     array: npt.NDArray,
     affine: npt.NDArray,
@@ -367,7 +362,7 @@ def array_to_sitk(
     array = array.transpose()  # (W, H, D, C) or (W, H, D)
     image = sitk.GetImageFromArray(array, isVector=is_multichannel)
 
-    origin, spacing, direction = get_sitk_metadata_from_ras_affine(
+    origin, spacing, direction = miou.get_metadata_from_ras_affine(
         affine,
         is_2d=is_2d,
     )
@@ -423,88 +418,11 @@ def get_ras_affine_from_sitk(
         origin_lps = origin_lps[:-1]
     else:
         raise RuntimeError(f"Invalid direction length: {direction_length}")
-    rotation_ras = np.dot(FLIPXY_33, rotation_lps)
+    _flipxy_33 = miou.flipxy_33()
+    rotation_ras = np.dot(_flipxy_33, rotation_lps)
     rotation_ras_zoom = rotation_ras * spacing
-    translation_ras = np.dot(FLIPXY_33, origin_lps)
+    translation_ras = np.dot(_flipxy_33, origin_lps)
     affine = np.eye(4)
     affine[:3, :3] = rotation_ras_zoom
     affine[:3, 3] = translation_ras
     return affine
-
-
-def get_sitk_metadata_from_ras_affine(
-    affine: npt.NDArray,
-    *,
-    is_2d: builtins.bool = False,
-    lps: builtins.bool = True,
-) -> typing.Tuple[miot.TripletFloat, miot.TripletFloat, miot.Direction]:
-    direction_ras, spacing_array = get_rotation_and_spacing_from_affine(affine)
-    origin_ras = affine[:3, 3]
-    origin_lps = np.dot(FLIPXY_33, origin_ras)
-    direction_lps = np.dot(FLIPXY_33, direction_ras)
-    if is_2d:  # ignore orientation if 2D (1, W, H, 1)
-        direction_lps = np.diag((-1, -1)).astype(np.float64)
-        direction_ras = np.diag((1, 1)).astype(np.float64)
-    origin_array = origin_lps if lps else origin_ras
-    direction_array = direction_lps if lps else direction_ras
-    direction_array = direction_array.flatten()
-    # The following are to comply with typing hints
-    # (there must be prettier ways to do this)
-    ox, oy, oz = origin_array
-    sx, sy, sz = spacing_array
-    direction: miot.Direction
-    if is_2d:
-        d1, d2, d3, d4 = direction_array
-        direction = d1, d2, d3, d4
-    else:
-        d1, d2, d3, d4, d5, d6, d7, d8, d9 = direction_array
-        direction = d1, d2, d3, d4, d5, d6, d7, d8, d9
-    origin = ox, oy, oz
-    spacing = sx, sy, sz
-    return origin, spacing, direction
-
-
-def ensure_4d(
-    array: npt.NDArray, *, num_spatial_dims: typing.Optional[builtins.int] = None
-) -> npt.NDArray:
-    """for PyTorch"""
-    num_dimensions = array.ndim
-    if num_dimensions == 4:
-        pass
-    elif num_dimensions == 5:  # hope (W, H, D, 1, C)
-        if array.shape[-2] == 1:
-            array = array[..., 0, :]
-            array = array.transpose((3, 0, 1, 2))
-        else:
-            raise ValueError("5D is not supported for shape[-2] > 1")
-    elif num_dimensions == 2:  # assume 2D monochannel (W, H)
-        array = array[np.newaxis, ..., np.newaxis]  # (1, W, H, 1)
-    elif num_dimensions == 3:  # 2D multichannel or 3D monochannel?
-        if num_spatial_dims == 2:
-            array = array[..., np.newaxis]  # (C, W, H, 1)
-        elif num_spatial_dims == 3:  # (W, H, D)
-            array = array[np.newaxis]  # (1, W, H, D)
-        else:  # try to guess
-            shape = array.shape
-            maybe_rgb = 3 in (shape[0], shape[-1])
-            if maybe_rgb:
-                if shape[-1] == 3:  # (W, H, 3)
-                    array = array.transpose((2, 0, 1))  # (3, W, H)
-                array = array[..., np.newaxis]  # (3, W, H, 1)
-            else:  # (W, H, D)
-                array = array[np.newaxis]  # (1, W, H, D)
-    else:
-        message = f"{num_dimensions}D images not supported yet."
-        raise NotImplementedError(message)
-    assert array.ndim == 4
-    return array
-
-
-def check_uint_to_int(array: npt.NDArray) -> npt.NDArray:
-    """convert to int b/c PyTorch won't take uint16 nor uint32"""
-    if array.dtype == np.uint16:
-        return array.astype(np.int32)
-    elif array.dtype == np.uint32:
-        return array.astype(np.int64)
-    else:
-        return array

@@ -20,7 +20,7 @@ try:
     import nibabel as nib
     import SimpleITK as sitk
 except (ModuleNotFoundError, ImportError) as e:
-    msg = f"nibabel and SimpleITK must be installed to use {__name__}."
+    msg = f"NiBabel and SimpleITK must be installed to use {__name__}."
     raise RuntimeError(msg) from e
 
 import medio.base as miob
@@ -30,16 +30,11 @@ import medio.typing as miot
 
 
 class Image(miob.ImageBase):
-    def __repr__(self) -> builtins.str:
-        _properties = [
-            f"shape: {self.shape}",
-            f"spacing: {self.get_spacing_string()}",
-            f'orientation: {"".join(self.orientation)}+',
-            f"dtype: {self.data.dtype.__name__}",  # type: ignore[attr-defined]
-        ]
-        properties = "; ".join(_properties)
-        string = f"{self.__class__.__name__}({properties})"
-        return string
+    @property
+    def _repr_properties(self) -> typing.List[builtins.str]:
+        props = super()._repr_properties
+        props += [f"orientation: {''.join(self.orientation)}+"]
+        return props
 
     @property
     def orientation(self) -> typing.Tuple[builtins.str, builtins.str, builtins.str]:
@@ -47,33 +42,6 @@ class Image(miob.ImageBase):
         codes: typing.Tuple[builtins.str, builtins.str, builtins.str]
         codes = nib.aff2axcodes(self.affine)
         return codes
-
-    @property
-    def direction(self) -> miot.Direction:
-        _, _, direction = miof.get_sitk_metadata_from_ras_affine(self.affine, lps=False)
-        return direction
-
-    @property
-    def spacing(self) -> typing.Tuple[builtins.float, ...]:
-        """Voxel spacing in mm."""
-        _, spacing = miof.get_rotation_and_spacing_from_affine(self.affine)
-        return tuple(spacing)
-
-    @property
-    def origin(self) -> typing.Tuple[builtins.float, ...]:
-        """Center of first voxel in array, in mm."""
-        return tuple(self.affine[:3, 3])
-
-    @property
-    def itemsize(self) -> builtins.int:
-        """Element size of the data type."""
-        return self.data.itemsize
-
-    @property
-    def memory(self) -> builtins.float:
-        """Number of Bytes that the tensor takes in the RAM."""
-        mem: builtins.float = np.prod(self.shape) * self.itemsize
-        return mem
 
     @property
     def bounds(self) -> npt.NDArray:
@@ -117,11 +85,6 @@ class Image(miob.ImageBase):
             raise ValueError(message)
         return flipped_axis
 
-    def get_spacing_string(self) -> builtins.str:
-        strings = [f"{n:.2f}" for n in self.spacing]
-        string = f'({", ".join(strings)})'
-        return string
-
     def get_bounds(self) -> miot.Bounds:
         """Get minimum and maximum world coordinates occupied by the image."""
         first_index = 3 * (-0.5,)
@@ -152,17 +115,15 @@ class Image(miob.ImageBase):
         else:
             return r, a, s
 
-    def torch_compatible(self) -> npt.NDArray:
-        return miof.ensure_4d(miof.check_uint_to_int(self.data))
-
     @classmethod
     def from_path(
         cls: typing.Type[Image],
         path: miot.PathLike,
         *,
         dtype: npt.DTypeLike = np.float32,
+        mmap: builtins.bool = False,
     ) -> Image:
-        data, affine = miof.read_image(path, dtype=dtype)
+        data, affine = miof.read_image(path, dtype=dtype, mmap=mmap)
         return cls(data=data, affine=affine)
 
     @classmethod
