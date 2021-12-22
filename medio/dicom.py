@@ -205,7 +205,7 @@ class DICOMDir:
     @classmethod
     def from_path(
         cls: typing.Type[DICOMDir],
-        dicom_path: typing.Union[miot.PathLike, typing.Iterable[miot.PathLike]],
+        dicom_path: miot.PathLike | typing.Iterable[miot.PathLike],
         *,
         max_nonuniformity: float = 5e-4,
         fail_outside_max_nonuniformity: bool = True,
@@ -359,7 +359,7 @@ class DICOMImage(miob.ImageBase):
     @classmethod
     def from_path(
         cls: typing.Type[DICOMImage],
-        dicom_path: typing.Union[miot.PathLike, typing.Iterable[miot.PathLike]],
+        dicom_path: miot.PathLike | typing.Iterable[miot.PathLike],
         *,
         rescale: typing.Optional[builtins.bool] = None,
         rescale_dtype: npt.DTypeLike = np.float32,

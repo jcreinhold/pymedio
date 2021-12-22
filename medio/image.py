@@ -31,8 +31,8 @@ import medio.typing as miot
 
 class Image(miob.ImageBase):
     @property
-    def _repr_properties(self) -> typing.List[builtins.str]:
-        props = super()._repr_properties
+    def str_properties(self) -> typing.List[builtins.str]:
+        props = super().str_properties
         props += [f"orientation: {''.join(self.orientation)}+"]
         return props
 
@@ -99,7 +99,7 @@ class Image(miob.ImageBase):
         self, path: miot.PathLike, *, squeeze: typing.Optional[builtins.bool] = None
     ) -> None:
         miof.write_image(
-            self.data,
+            self.view(np.ndarray),
             self.affine,
             path,
             squeeze=squeeze,
@@ -173,7 +173,7 @@ class Image(miob.ImageBase):
     def from_dicom_image(
         cls: typing.Type[Image], dicom_image: miod.DICOMImage
     ) -> Image:
-        return cls(data=dicom_image.data, affine=dicom_image.affine)
+        return cls(data=dicom_image, affine=dicom_image.affine)
 
     @classmethod
     def from_dicom_zipped_stream(
@@ -198,7 +198,7 @@ class Image(miob.ImageBase):
 
     def to_sitk(self, **kwargs: builtins.bool) -> sitk.Image:
         """Get the image as an instance of :class:`sitk.Image`."""
-        return miof.array_to_sitk(self.data, self.affine, **kwargs)
+        return miof.array_to_sitk(self.view(np.ndarray), self.affine, **kwargs)
 
     def to_nibabel(self) -> nib.Nifti1Image:
-        return nib.Nifti1Image(self.data, self.affine)
+        return nib.Nifti1Image(self.view(np.ndarray), self.affine)
