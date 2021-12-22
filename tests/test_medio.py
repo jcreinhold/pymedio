@@ -194,23 +194,38 @@ def test_nifti_gzipped_image_from_zipped_stream(
 def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     image = miod.DICOMImage.from_path(dicom_image_dir)
     assert image.shape == (TEST_IMAGE_SHAPE + (NUM_DUPLICATES,))
+    image = image + 0.0
     image += 1.0
-    assert isinstance(image, miod.DICOMImage)
     image *= image
     assert isinstance(image, miod.DICOMImage)
     s = "DICOMImage(shape: (128, 128, 2); spacing: (0.66, 0.66, 0.00); dtype: float32)"
+    assert str(image) == s
+    mask = image == 0.0
+    assert isinstance(mask, miod.DICOMImage)
+    subimage = image[:20, :20, :]
+    assert isinstance(subimage, miod.DICOMImage)
+    image = image.astype(np.float16)
+    assert isinstance(image, miod.DICOMImage)
+    s = "DICOMImage(shape: (128, 128, 2); spacing: (0.66, 0.66, 0.00); dtype: float16)"
     assert str(image) == s
 
 
 def test_numpy_ufuncs_on_image(image: mioi.Image) -> None:
     image += 1.0
-    assert np.all(image == 1.0)
-    assert isinstance(image, mioi.Image)
+    mask = image == 1.0
+    assert isinstance(mask, mioi.Image)
+    assert np.all(mask)
     image *= image
     assert np.all(image == 1.0)
     assert isinstance(image, mioi.Image)
+    image = image[0:2]
+    assert isinstance(image, mioi.Image)
+    image[0:2] = 0.0
     s = "Image(shape: (1, 1, 1); spacing: (1.00, 1.00, 1.00); dtype: float32; orientation: RAS+)"
     assert str(image) == s
+    _image = np.squeeze(image)
+    s = "Image(shape: (); spacing: (1.00, 1.00, 1.00); dtype: float32; orientation: RAS+)"
+    assert str(_image) == s
 
 
 @pytest.mark.skipif(torch is None, reason="Requires torch")

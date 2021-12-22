@@ -2,6 +2,8 @@
 Author: Jacob Reinhold <jcreinhold@gmail.com>
 """
 
+from __future__ import annotations
+
 __all__ = [
     "Bounds",
     "DataAffine",

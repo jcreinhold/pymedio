@@ -4,6 +4,8 @@ https://github.com/fepegar/torchio
 Author: Jacob Reinhold <jcreinhold@gmail.com>
 """
 
+from __future__ import annotations
+
 __all__ = [
     "read_affine",
     "read_image",
@@ -398,7 +400,7 @@ def sitk_to_array(
 
 
 def get_ras_affine_from_sitk(
-    sitk_object: typing.Union[sitk.Image, sitk.ImageFileReader],
+    sitk_object: sitk.Image | sitk.ImageFileReader,
 ) -> npt.NDArray:
     spacing = np.asanyarray(sitk_object.GetSpacing())
     direction_lps = np.asanyarray(sitk_object.GetDirection())

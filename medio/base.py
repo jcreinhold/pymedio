@@ -12,49 +12,53 @@ import typing
 import warnings
 
 import numpy as np
-import numpy.lib.mixins
 import numpy.typing as npt
 
 import medio.typing as miot
 import medio.utils as miou
 
-UfuncMethod = typing.Literal[
+_UfuncMethod = typing.Literal[
     "__call__", "reduce", "reduceat", "accumulate", "outer", "inner"
 ]
+_Image = typing.TypeVar("_Image", bound="ImageBase")
 
 
-class ImageBase(numpy.lib.mixins.NDArrayOperatorsMixin):
+class ImageBase(np.ndarray):
 
     _HANDLED_TYPES = (np.ndarray, numbers.Number)
+    _affine: npt.NDArray
 
-    def __init__(
-        self,
-        data: npt.NDArray,
+    def __new__(
+        cls: typing.Type[_Image],
+        data: npt.ArrayLike,
         affine: typing.Optional[npt.NDArray] = None,
-    ):
-        self._data = self._check_data(data)
-        self._affine = self._check_affine(affine)
+    ) -> _Image:
+        obj = cls._check_data(data).view(cls)
+        obj._affine = cls._check_affine(affine)
+        return obj
+
+    def __array_finalize__(self, obj: _Image) -> None:
+        if obj is None:
+            return
+        self._affine = getattr(obj, "_affine", None)
 
     @property
-    def _repr_properties(self) -> typing.List[builtins.str]:
+    def str_properties(self) -> typing.List[builtins.str]:
         return [
             f"shape: {self.shape}",
             f"spacing: {self.get_spacing_string()}",
-            f"dtype: {self.data.dtype.name}",
+            f"dtype: {self.dtype.name}",
         ]
 
-    def __repr__(self) -> builtins.str:
-        properties = "; ".join(self._repr_properties)
+    def __str__(self) -> builtins.str:
+        properties = "; ".join(self.str_properties)
         string = f"{self.__class__.__name__}({properties})"
         return string
-
-    def __array__(self, dtype: typing.Optional[npt.DTypeLike] = None) -> npt.NDArray:
-        return np.asanyarray(self.data, dtype=dtype)
 
     def __array_ufunc__(
         self,
         ufunc: np.ufunc,
-        method: UfuncMethod,
+        method: _UfuncMethod,
         *inputs: typing.Any,
         **kwargs: typing.Any,
     ) -> typing.Any:
@@ -63,27 +67,22 @@ class ImageBase(numpy.lib.mixins.NDArrayOperatorsMixin):
         for x in inputs + out:
             if not isinstance(x, self._HANDLED_TYPES + (self.__class__,)):
                 return NotImplemented
+        affine = self.affine
         is_cls = lambda y: isinstance(y, self.__class__)
-        ufunc_args = tuple(x.data if is_cls(x) else x for x in inputs)
+        ufunc_args = tuple(x.view(np.ndarray) if is_cls(x) else x for x in inputs)
         if out:
-            kwargs["out"] = tuple(x.data if is_cls(x) else x for x in out)
+            kwargs["out"] = tuple(x.view(np.ndarray) if is_cls(x) else x for x in out)
+            if len(out) == 1 and is_cls(out[0]):
+                affine = out[0].affine
         result = getattr(ufunc, method)(*ufunc_args, **kwargs)
         if isinstance(result, tuple):
-            return tuple(self.__class__(x, self.affine) for x in result)
+            return tuple(self.__class__(x, affine) for x in result)
         elif method == "at":
             return None
         elif isinstance(result, np.ndarray):
-            return self.__class__(result, self.affine)
+            return typing.cast(_Image, self.__class__(result, affine))
         else:
-            return result  # e.g., result of np.all
-
-    @property
-    def data(self) -> npt.NDArray:
-        return self._data
-
-    @data.setter
-    def data(self, new_data: npt.NDArray) -> None:
-        self._data = self._check_data(new_data)
+            return result
 
     @property
     def affine(self) -> npt.NDArray:
@@ -92,14 +91,6 @@ class ImageBase(numpy.lib.mixins.NDArrayOperatorsMixin):
     @affine.setter
     def affine(self, new_affine: npt.NDArray) -> None:
         self._affine = self._check_affine(new_affine)
-
-    @property
-    def shape(self) -> miot.Shape:
-        return self.data.shape
-
-    @property
-    def dtype(self) -> npt.DTypeLike:
-        return self.data.dtype
 
     @property
     def direction(self) -> miot.Direction:
@@ -118,14 +109,9 @@ class ImageBase(numpy.lib.mixins.NDArrayOperatorsMixin):
         return tuple(self.affine[:3, 3])
 
     @property
-    def itemsize(self) -> builtins.int:
-        """Element size of the data type."""
-        return self.data.itemsize
-
-    @property
-    def memory(self) -> builtins.float:
+    def memory(self) -> builtins.int:
         """Number of Bytes that the tensor takes in the RAM."""
-        mem: builtins.float = np.prod(self.shape) * self.itemsize
+        mem: builtins.int = np.prod(self.shape) * self.itemsize
         return mem
 
     def get_spacing_string(self) -> builtins.str:
@@ -134,7 +120,8 @@ class ImageBase(numpy.lib.mixins.NDArrayOperatorsMixin):
         return string
 
     @staticmethod
-    def _check_data(data: npt.NDArray) -> npt.NDArray:
+    def _check_data(data: npt.ArrayLike) -> npt.NDArray:
+        data = np.asanyarray(data)
         if np.isnan(data).any():
             warnings.warn("NaNs found in data", RuntimeWarning)
         if any(d == 0 for d in data.shape):
@@ -154,15 +141,15 @@ class ImageBase(numpy.lib.mixins.NDArrayOperatorsMixin):
             raise ValueError(f"Affine shape must be (4, 4), not {bad_shape}")
         return affine
 
-    def to_npz(self, file: typing.Union[miot.PathLike, builtins.bytes]) -> None:
-        np.savez_compressed(file, data=self.data, affine=self.affine)
+    def to_npz(self, file: miot.PathLike | builtins.bytes) -> None:
+        np.savez_compressed(file, data=self.view(np.ndarray), affine=self.affine)
 
     @classmethod
     def from_npz(
-        cls: typing.Type[ImageBase], file: typing.Union[miot.PathLike, builtins.bytes]
-    ) -> ImageBase:
+        cls: typing.Type[_Image], file: miot.PathLike | builtins.bytes
+    ) -> _Image:
         _data = np.load(file)
-        return cls(data=_data["data"], affine=_data["affine"])
+        return cls(_data["data"], affine=_data["affine"])
 
     def torch_compatible(self) -> npt.NDArray:
-        return miou.ensure_4d(miou.check_uint_to_int(self.data))
+        return miou.ensure_4d(miou.check_uint_to_int(self.view(np.ndarray)))
