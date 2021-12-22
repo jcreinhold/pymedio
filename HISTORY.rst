@@ -2,6 +2,12 @@
 History
 =======
 
+0.1.2 (2021-12-22)
+------------------
+
+* Make Image classes proper subclasses of ndarray
+* Add type hints to support normal numpy operations on Images
+
 0.1.1 (2021-12-21)
 ------------------
 
