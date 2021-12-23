@@ -35,12 +35,14 @@ class ImageBase(np.ndarray):
     ) -> _Image:
         obj = cls._check_data(data).view(cls)
         obj._affine = cls._check_affine(affine)
+        obj._affine.flags.writeable = False
         return obj
 
     def __array_finalize__(self, obj: _Image) -> None:
         if obj is None:
             return
         self._affine = getattr(obj, "_affine", None)
+        self._affine.flags.writeable = False
 
     @property
     def str_properties(self) -> typing.List[builtins.str]:
