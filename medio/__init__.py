@@ -7,7 +7,7 @@ __description__ = "read arbitrary medical image formats in python"
 __url__ = "https://github.com/jcreinhold/pymedio"
 __author__ = """Jacob Reinhold"""
 __email__ = "jcreinhold@gmail.com"
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 __license__ = "MIT"
 __copyright__ = "Copyright 2021 Jacob Reinhold"
 
