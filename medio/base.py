@@ -143,12 +143,12 @@ class ImageBase(np.ndarray):
             raise ValueError(f"Affine shape must be (4, 4), not {bad_shape}")
         return affine
 
-    def to_npz(self, file: miot.PathLike | builtins.bytes) -> None:
+    def to_npz(self, file: miot.PathLike | typing.BinaryIO) -> None:
         np.savez_compressed(file, data=self.view(np.ndarray), affine=self.affine)
 
     @classmethod
     def from_npz(
-        cls: typing.Type[_Image], file: miot.PathLike | builtins.bytes
+        cls: typing.Type[_Image], file: miot.PathLike | typing.BinaryIO
     ) -> _Image:
         _data = np.load(file)
         return cls(_data["data"], affine=_data["affine"])
