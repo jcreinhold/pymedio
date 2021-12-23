@@ -43,9 +43,9 @@ def is_iterable(x: typing.Any) -> builtins.bool:
 
 
 def unzip(
-    zipped_list: typing.Sequence[typing.Tuple[typing.Any, ...]]
-) -> typing.List[typing.List[typing.Any]]:
-    return list(map(list, zip(*zipped_list)))
+    zipped_list: typing.Iterable[typing.Tuple[typing.Any, ...]]
+) -> typing.Iterable[typing.Tuple[typing.Any, ...]]:
+    return zip(*zipped_list)
 
 
 def get_rotation_and_spacing_from_affine(
