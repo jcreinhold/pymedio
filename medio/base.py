@@ -41,7 +41,7 @@ class ImageBase(np.ndarray):
     def __array_finalize__(self, obj: _Image) -> None:
         if obj is None:
             return
-        self._affine = getattr(obj, "_affine", None)
+        self._affine = self._check_affine(getattr(obj, "_affine", None))
         self._affine.flags.writeable = False
 
     @property
