@@ -399,12 +399,14 @@ class DICOMImage(miob.ImageBase):
         remove_anomalous_images: builtins.bool = True,
         rescale: typing.Optional[builtins.bool] = None,
         rescale_dtype: npt.DTypeLike = np.float32,
+        **zip_kwargs: typing.Any,
     ) -> DICOMImage:
         dicomdir = DICOMDir.from_zipped_stream(
             data_stream,
             max_nonuniformity=max_nonuniformity,
             fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
             remove_anomalous_images=remove_anomalous_images,
+            **zip_kwargs,
         )
         return cls.from_dicomdir(dicomdir, rescale=rescale, rescale_dtype=rescale_dtype)
 
