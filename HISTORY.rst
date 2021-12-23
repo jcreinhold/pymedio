@@ -2,6 +2,12 @@
 History
 =======
 
+0.1.3 (2021-12-23)
+------------------
+
+* Lazy load DICOM files to reduce peak memory consumption
+* Make DICOM and base image classes (more) immutable
+
 0.1.2 (2021-12-22)
 ------------------
 
