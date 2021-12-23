@@ -247,6 +247,14 @@ def test_save_image(
     image.save(save_path / "test.nii.gz")
 
 
+def test_save_image_npz(image: mioi.Image) -> None:
+    with io.BytesIO() as buffer:
+        image.to_npz(buffer)
+        buffer.seek(0)
+        new_image: mioi.Image = mioi.Image.from_npz(buffer)
+        assert np.all(image == new_image)
+
+
 def test_to_sitk(image: mioi.Image) -> None:
     assert isinstance(image.to_sitk(), sitk.Image)
 
