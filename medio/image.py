@@ -95,9 +95,7 @@ class Image(miob.ImageBase):
         bounds_x, bounds_y, bounds_z = array.T.tolist()
         return bounds_x, bounds_y, bounds_z
 
-    def save(
-        self, path: miot.PathLike, *, squeeze: typing.Optional[builtins.bool] = None
-    ) -> None:
+    def save(self, path: miot.PathLike, *, squeeze: builtins.bool = True) -> None:
         miof.write_image(
             self.view(np.ndarray),
             self.affine,

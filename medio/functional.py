@@ -190,10 +190,13 @@ def write_image(
     affine: npt.NDArray,
     path: miot.PathLike,
     *,
-    squeeze: typing.Optional[builtins.bool] = None,
+    squeeze: builtins.bool = True,
+    **write_sitk_kwargs: builtins.bool,
 ) -> None:
+    if squeeze:
+        array = array.squeeze()
     try:
-        _write_sitk(array, affine, path, squeeze=squeeze)
+        _write_sitk(array, affine, path, **write_sitk_kwargs)
     except RuntimeError:  # try with NiBabel
         _write_nibabel(array, affine, path)
 
@@ -207,14 +210,12 @@ def _write_nibabel(
     Expects a path with an extension that can be used by nibabel.save
     to write a NIfTI-1 image, such as '.nii.gz' or '.img'
     """
-    assert array.ndim == 4
     num_components = array.shape[0]
-
     # NIfTI components must be at the end, in a 5D array
     if num_components == 1:
         array = array[0]
-    else:
-        array = array[np.newaxis].permute(2, 3, 4, 0, 1)
+    elif array.ndim == 4:
+        array = array.transpose((1, 2, 3, 0))
     suffix = pathlib.Path(str(path).replace(".gz", "")).suffix
     if ".nii" in suffix:
         img = nib.Nifti1Image(np.asanyarray(array), affine)
@@ -235,7 +236,7 @@ def _write_sitk(
     path: miot.PathLike,
     *,
     use_compression: builtins.bool = True,
-    squeeze: typing.Optional[builtins.bool] = None,
+    is_multichannel: builtins.bool = False,
 ) -> None:
     path = pathlib.Path(path)
     if path.suffix in (".png", ".jpg", ".jpeg", ".bmp"):
@@ -244,11 +245,7 @@ def _write_sitk(
             RuntimeWarning,
         )
         array = array.astype(np.uint8)
-    if squeeze is None:
-        force_3d = path.suffix not in IMAGE_2D_FORMATS
-    else:
-        force_3d = not squeeze
-    image = array_to_sitk(array, affine, force_3d=force_3d)
+    image = array_to_sitk(array, affine, is_multichannel=is_multichannel)
     sitk.WriteImage(image, str(path), use_compression)
 
 
@@ -340,43 +337,28 @@ def array_to_sitk(
     array: npt.NDArray,
     affine: npt.NDArray,
     *,
-    force_3d: builtins.bool = False,
-    force_4d: builtins.bool = False,
+    is_multichannel: builtins.bool = False,
 ) -> sitk.Image:
-    """Create a SimpleITK image from a tensor and a 4x4 affine matrix."""
-    if array.ndim != 4:
-        shape = tuple(array.shape)
-        raise ValueError(f"Input must be 4D, but has shape {shape}")
-    # Possibilities
-    # (1, w, h, 1)
-    # (c, w, h, 1)
-    # (1, w, h, 1)
-    # (c, w, h, d)
+    """Create a SimpleITK image from an array and a 4x4 affine matrix."""
+    ndim = array.ndim
     array = np.asanyarray(array)
     affine = np.asanyarray(affine, dtype=np.float64)
-
-    is_multichannel = array.shape[0] > 1 and not force_4d
-    is_2d = array.shape[3] == 1 and not force_3d
-    if is_2d:
-        array = array[..., 0]
-    if not is_multichannel and not force_4d:
-        array = array[0]
-    array = array.transpose()  # (W, H, D, C) or (W, H, D)
-    image = sitk.GetImageFromArray(array, isVector=is_multichannel)
-
+    image = sitk.GetImageFromArray(array.transpose(), isVector=is_multichannel)
+    is_2d = (ndim == 3 and is_multichannel) or (ndim == 2 and not is_multichannel)
     origin, spacing, direction = miou.get_metadata_from_ras_affine(
         affine,
         is_2d=is_2d,
     )
-    image.SetOrigin(origin)  # should I add a 4th value if force_4d?
+    image.SetOrigin(origin)
     image.SetSpacing(spacing)
     image.SetDirection(direction)
-
-    if array.ndim == 4:
-        assert image.GetNumberOfComponentsPerPixel() == array.shape[0]
     num_spatial_dims = 2 if is_2d else 3
-    assert image.GetSize() == array.shape[1 : 1 + num_spatial_dims]
-
+    offset = 1 if is_multichannel else 0
+    if is_multichannel:
+        num_components = array.shape[0]
+        assert image.GetNumberOfComponentsPerPixel() == num_components
+    spatial_dims = array.shape[offset : offset + num_spatial_dims]
+    assert image.GetSize() == spatial_dims, f"{image.GetSize()} != {spatial_dims}"
     return image
 
 
@@ -387,14 +369,13 @@ def sitk_to_array(
     data = np.asanyarray(array_view, dtype=dtype).transpose()
     num_components = image.GetNumberOfComponentsPerPixel()
     input_spatial_dims = image.GetDimension()
-    if input_spatial_dims == 2:
-        data = data[..., np.newaxis]
-    elif input_spatial_dims == 4:  # probably a bad NIfTI (1, sx, sy, sz, c)
+    if input_spatial_dims == 5:  # probably a bad NIfTI (1, sx, sy, sz, c)
         # Try to fix it
         num_components = data.shape[-1]
         data = data[0]
         data = data.transpose(3, 0, 1, 2)
-    assert data.shape[0] == num_components
+    if num_components > 1:
+        assert data.shape[0] == num_components, f"{data.shape[0]} != {num_components}"
     affine = get_ras_affine_from_sitk(image)
     return data, affine
 

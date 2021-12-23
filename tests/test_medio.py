@@ -11,6 +11,7 @@ import nibabel as nib
 import numpy as np
 import pydicom
 import pytest
+import SimpleITK as sitk
 from pydicom.data import get_testdata_file
 
 import medio.dicom as miod
@@ -24,7 +25,7 @@ except (ModuleNotFoundError, ImportError):
 NUM_DUPLICATES = 2
 TEST_IMAGE_NAME = "CT_small.dcm"
 TEST_IMAGE_SHAPE = (128, 128)
-NIFTI_IMAGE_SHAPE = (1, 1, 1)
+NIFTI_IMAGE_SHAPE = (2, 2, 2)
 
 
 @pytest.fixture(scope="session")
@@ -198,7 +199,7 @@ def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     image += 1.0
     image *= image
     assert isinstance(image, miod.DICOMImage)
-    s = "DICOMImage(shape: (128, 128, 2); spacing: (0.66, 0.66, 0.00); dtype: float32)"
+    s = f"DICOMImage(shape: (128, 128, {NUM_DUPLICATES}); spacing: (0.66, 0.66, 0.00); dtype: float32)"
     assert str(image) == s
     mask = image == 0.0
     assert isinstance(mask, miod.DICOMImage)
@@ -206,7 +207,7 @@ def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     assert isinstance(subimage, miod.DICOMImage)
     image = image.astype(np.float16)
     assert isinstance(image, miod.DICOMImage)
-    s = "DICOMImage(shape: (128, 128, 2); spacing: (0.66, 0.66, 0.00); dtype: float16)"
+    s = f"DICOMImage(shape: (128, 128, {NUM_DUPLICATES}); spacing: (0.66, 0.66, 0.00); dtype: float16)"
     assert str(image) == s
 
 
@@ -221,13 +222,34 @@ def test_numpy_ufuncs_on_image(image: mioi.Image) -> None:
     image = image[0:2]
     assert isinstance(image, mioi.Image)
     image[0:2] = 0.0
-    s = "Image(shape: (1, 1, 1); spacing: (1.00, 1.00, 1.00); dtype: float32; orientation: RAS+)"
+    s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1.00, 1.00, 1.00); dtype: float32; orientation: RAS+)"
     assert str(image) == s
-    _image = np.squeeze(image)
-    s = "Image(shape: (); spacing: (1.00, 1.00, 1.00); dtype: float32; orientation: RAS+)"
+    _image = np.squeeze(image).astype(np.float16)
+    s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1.00, 1.00, 1.00); dtype: float16; orientation: RAS+)"
     assert str(_image) == s
+    image = image.ravel()
+    assert isinstance(image, mioi.Image)
+    image = image.view(mioi.Image)
+    assert isinstance(image, mioi.Image)
+    _image2 = image.view(np.ndarray)
+    assert isinstance(image, np.ndarray)
 
 
 @pytest.mark.skipif(torch is None, reason="Requires torch")
 def test_convert_to_torch(image: mioi.Image) -> None:
     torch.as_tensor(image.torch_compatible())
+
+
+def test_save_image(
+    tmp_path_factory: pytest.TempPathFactory, image: mioi.Image
+) -> None:
+    save_path = tmp_path_factory.mktemp("save").resolve(strict=True)
+    image.save(save_path / "test.nii.gz")
+
+
+def test_to_sitk(image: mioi.Image) -> None:
+    assert isinstance(image.to_sitk(), sitk.Image)
+
+
+def test_to_nibabel(image: mioi.Image) -> None:
+    assert isinstance(image.to_nibabel(), nib.Nifti1Image)
