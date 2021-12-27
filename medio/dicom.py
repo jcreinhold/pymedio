@@ -132,8 +132,8 @@ class SortedSlices:
     def check_nonuniformity(
         self,
         *,
-        max_nonuniformity: float = 5e-4,
-        fail_outside_max_nonuniformity: bool = True,
+        max_nonuniformity: builtins.float = 5e-4,
+        fail_outside_max_nonuniformity: builtins.bool = True,
     ) -> None:
         if len(self) > 1:
             diffs = np.diff(self.positions)
@@ -187,8 +187,8 @@ class DICOMDir:
         datasets: typing.Sequence[pydicom.Dataset],
         *,
         paths: typing.Optional[typing.Sequence[miot.PathLike]] = None,
-        max_nonuniformity: float = 5e-4,
-        fail_outside_max_nonuniformity: bool = True,
+        max_nonuniformity: builtins.float = 5e-4,
+        fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
     ) -> DICOMDir:
         if not datasets:
@@ -217,8 +217,8 @@ class DICOMDir:
         cls: typing.Type[DICOMDir],
         dicom_path: miot.PathLike | typing.Iterable[miot.PathLike],
         *,
-        max_nonuniformity: float = 5e-4,
-        fail_outside_max_nonuniformity: bool = True,
+        max_nonuniformity: builtins.float = 5e-4,
+        fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
         defer_size: builtins.str | builtins.int | None = "1 KB",
     ) -> DICOMDir:
@@ -250,8 +250,8 @@ class DICOMDir:
         cls: typing.Type[DICOMDir],
         data_stream: typing.BinaryIO,
         *,
-        max_nonuniformity: float = 5e-4,
-        fail_outside_max_nonuniformity: bool = True,
+        max_nonuniformity: builtins.float = 5e-4,
+        fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
         **zip_kwargs: typing.Any,
     ) -> DICOMDir:
@@ -377,8 +377,8 @@ class DICOMImage(miob.ImageBase):
         *,
         rescale: typing.Optional[builtins.bool] = None,
         rescale_dtype: npt.DTypeLike = np.float32,
-        max_nonuniformity: float = 5e-4,
-        fail_outside_max_nonuniformity: bool = True,
+        max_nonuniformity: builtins.float = 5e-4,
+        fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
     ) -> DICOMImage:
         dicomdir = DICOMDir.from_path(
@@ -394,8 +394,8 @@ class DICOMImage(miob.ImageBase):
         cls: typing.Type[DICOMImage],
         data_stream: typing.BinaryIO,
         *,
-        max_nonuniformity: float = 5e-4,
-        fail_outside_max_nonuniformity: bool = True,
+        max_nonuniformity: builtins.float = 5e-4,
+        fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
         rescale: typing.Optional[builtins.bool] = None,
         rescale_dtype: npt.DTypeLike = np.float32,
