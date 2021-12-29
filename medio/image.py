@@ -19,9 +19,9 @@ import numpy.typing as npt
 try:
     import nibabel as nib
     import SimpleITK as sitk
-except (ModuleNotFoundError, ImportError) as e:
+except (ModuleNotFoundError, ImportError) as imp_exn:
     msg = f"NiBabel and SimpleITK must be installed to use {__name__}."
-    raise RuntimeError(msg) from e
+    raise RuntimeError(msg) from imp_exn
 
 import medio.base as miob
 import medio.dicom as miod

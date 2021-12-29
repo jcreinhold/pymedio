@@ -19,7 +19,8 @@ Basically, this package is just a modified version of
 `torchio <https://github.com/fepegar/torchio>`_ [1]_
 and `dicom-numpy <https://github.com/innolitics/dicom-numpy>`_
 which eagerly loads images (depending on the backend and settings) and returns
-them as numpy arrays (instead of PyTorch tensors, as is the case in torchio).
+them as `NumPy <https://numpy.org/>`_ arrays (instead of PyTorch tensors, as
+is the case in torchio).
 
 There are also various factory functions to load and work with images from
 memory buffers instead of from disk which is preferable in certain environments,
@@ -45,15 +46,22 @@ To install from the source directory, clone the repo and run::
 
     python setup.py install
 
-The package only comes with pydicom installed by default; if you want to load non-DICOM images (using
-`SimpleITK <https://simpleitk.org/>`_ or `nibabel <https://nipy.org/nibabel/>`_ as a backend), install with::
+To make the package as portable as possible, the package only comes with numpy installed by default.
+
+If you want to load only DICOM images (using `pydicom <https://github.com/pydicom/pydicom>`_) install with::
+
+    pip install "pymedio[dicom]"
+
+If you want to load DICOM and non-DICOM images (using `SimpleITK <https://simpleitk.org/>`_ or
+`nibabel <https://nipy.org/nibabel/>`_ as a backend), install with::
 
     pip install "pymedio[all]"
 
 Basic Usage
 -----------
 
-Say you have a directory of DICOM images at the path ``dicom_dir``, then you can open it with:
+Say you have a directory of DICOM images at the path ``dicom_dir``, and you installed the package with ``dicom``
+extras, then you can open it with:
 
 .. code-block:: python
 
@@ -77,12 +85,40 @@ In either case, you can proceed to work with the image data like a normal numpy 
     image += 1.0
     image *= image
 
+Note that the image will have a ``affine`` attribute which stores the (affine) coordinate transformation
+matrix to/from scanner coordinates/voxels (even after applying numpy functions/operations to the image).
+
 You can convert an either image class to a torch tensor—if you have it installed—like:
 
 .. code-block:: python
 
     import torch
     tensor = torch.as_tensor(image.torch_compatible())
+
+If you want to save an image as a non-standard data type (e.g., a 16-bit floating point number), do so with:
+
+.. code-block:: python
+
+    # optionally convert the image to the desired type
+    f16_image = image.astype(np.float16)
+    f16_image.to_npz("image-f16.npz")
+
+Then, in a more resource-constrained environment, you can install pymedio without any extras and run, e.g.,
+
+.. code-block:: python
+
+    from medio.base import ImageBase as Image
+    f16_image = Image.from_npz("image-f16.npz")
+    print(f16_image.affine)
+
+To view the image in a standard reader following some processing (assuming ``all`` extras installed),
+you can then do, e.g.,
+
+.. code-block:: python
+
+    import medio.image as mioi
+    image = mioi.Image.from_npz("image-f16.npz")
+    image.astype(np.float32).save("image.nii.gz")
 
 References
 ----------
