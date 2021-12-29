@@ -23,7 +23,12 @@ import zipfile
 
 import numpy as np
 import numpy.typing as npt
-import pydicom
+
+try:
+    import pydicom
+except (ModuleNotFoundError, ImportError) as imp_exn:
+    msg = f"pydicom must be installed to use {__name__}."
+    raise RuntimeError(msg) from imp_exn
 
 import medio.base as miob
 import medio.exceptions as mioe
