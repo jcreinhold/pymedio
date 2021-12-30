@@ -369,9 +369,10 @@ class DICOMImage(miob.ImageBase):
         *,
         rescale: typing.Optional[builtins.bool] = None,
         rescale_dtype: npt.DTypeLike = np.float32,
+        order: typing.Optional[typing.Literal["F", "C"]] = None,
     ) -> DICOMImage:
         data = cls._merge_slice_pixel_arrays(
-            dicom_dir.slices, rescale=rescale, rescale_dtype=rescale_dtype
+            dicom_dir.slices, rescale=rescale, rescale_dtype=rescale_dtype, order=order
         )
         return cls(data=data, affine=dicom_dir.affine)
 
@@ -380,11 +381,12 @@ class DICOMImage(miob.ImageBase):
         cls: typing.Type[DICOMImage],
         dicom_path: miot.PathLike | typing.Iterable[miot.PathLike],
         *,
-        rescale: typing.Optional[builtins.bool] = None,
-        rescale_dtype: npt.DTypeLike = np.float32,
         max_nonuniformity: builtins.float = 5e-4,
         fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
+        rescale: typing.Optional[builtins.bool] = None,
+        rescale_dtype: npt.DTypeLike = np.float32,
+        order: typing.Optional[typing.Literal["F", "C"]] = None,
     ) -> DICOMImage:
         dicomdir = DICOMDir.from_path(
             dicom_path,
@@ -392,7 +394,9 @@ class DICOMImage(miob.ImageBase):
             fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
             remove_anomalous_images=remove_anomalous_images,
         )
-        return cls.from_dicomdir(dicomdir, rescale=rescale, rescale_dtype=rescale_dtype)
+        return cls.from_dicomdir(
+            dicomdir, rescale=rescale, rescale_dtype=rescale_dtype, order=order
+        )
 
     @classmethod
     def from_zipped_stream(
@@ -404,6 +408,7 @@ class DICOMImage(miob.ImageBase):
         remove_anomalous_images: builtins.bool = True,
         rescale: typing.Optional[builtins.bool] = None,
         rescale_dtype: npt.DTypeLike = np.float32,
+        order: typing.Optional[typing.Literal["F", "C"]] = None,
         **zip_kwargs: typing.Any,
     ) -> DICOMImage:
         dicomdir = DICOMDir.from_zipped_stream(
@@ -413,7 +418,9 @@ class DICOMImage(miob.ImageBase):
             remove_anomalous_images=remove_anomalous_images,
             **zip_kwargs,
         )
-        return cls.from_dicomdir(dicomdir, rescale=rescale, rescale_dtype=rescale_dtype)
+        return cls.from_dicomdir(
+            dicomdir, rescale=rescale, rescale_dtype=rescale_dtype, order=order
+        )
 
     @classmethod
     def _merge_slice_pixel_arrays(
@@ -422,6 +429,7 @@ class DICOMImage(miob.ImageBase):
         *,
         rescale: typing.Optional[builtins.bool] = None,
         rescale_dtype: npt.DTypeLike = np.float32,
+        order: typing.Optional[typing.Literal["F", "C"]] = None,
     ) -> npt.NDArray:
         if rescale is None:
             rescale = any(cls._requires_rescaling(d) for d in slices)
@@ -429,11 +437,16 @@ class DICOMImage(miob.ImageBase):
         first_dataset = slices[0]
         slice_dtype = first_dataset.pixel_array.dtype
         slice_shape = first_dataset.pixel_array.T.shape
+        slice_order = "F" if first_dataset.pixel_array.T.flags.f_contiguous else "C"
         num_slices = len(slices)
 
         voxels_shape = slice_shape + (num_slices,)
         voxels_dtype = rescale_dtype if rescale else slice_dtype
-        voxels = np.empty(voxels_shape, dtype=voxels_dtype, order="F")
+        voxels = np.empty(
+            voxels_shape,
+            dtype=voxels_dtype,
+            order=typing.cast(typing.Literal["F", "C"], slice_order),
+        )
 
         for k, dataset in enumerate(slices):
             pixel_array = dataset.pixel_array.T.astype(voxels_dtype)
@@ -445,6 +458,15 @@ class DICOMImage(miob.ImageBase):
                 if intercept != 0.0:
                     pixel_array += intercept
             voxels[..., k] = pixel_array
+
+        if order is not None:
+            if order == "C":
+                voxels = np.ascontiguousarray(voxels)
+            elif order == "F":
+                voxels = np.asfortranarray(voxels)
+            else:
+                msg = f"If order given, must be either 'F' or 'C'. Got {order}."
+                raise ValueError(msg)
 
         assert voxels.dtype == voxels_dtype
         return voxels
