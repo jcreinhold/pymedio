@@ -148,9 +148,11 @@ class ImageBase(np.ndarray):
 
     @classmethod
     def from_npz(
-        cls: typing.Type[_Image], file: miot.PathLike | typing.BinaryIO
+        cls: typing.Type[_Image],
+        file: miot.PathLike | typing.BinaryIO,
+        **np_load_kwargs,
     ) -> _Image:
-        _data = np.load(file)
+        _data = np.load(file, **np_load_kwargs)
         return cls(_data["data"], affine=_data["affine"])
 
     def torch_compatible(self) -> npt.NDArray:
