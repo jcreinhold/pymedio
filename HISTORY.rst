@@ -2,6 +2,12 @@
 History
 =======
 
+0.1.6 (2021-12-30)
+------------------
+
+* Add order option to DICOMImage
+* Add numpy load kwargs to ``from_npz`` class method in ImageBase.
+
 0.1.5 (2021-12-29)
 ------------------
 
