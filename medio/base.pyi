@@ -10,7 +10,6 @@ _UfuncMethod = typing.Literal[
     "__call__", "reduce", "reduceat", "accumulate", "outer", "inner"
 ]
 _Image = typing.TypeVar("_Image", bound="ImageBase")
-_ArrayNumber_co = npt.NDArray[typing.Union[np.bool_, np.number[typing.Any]]]
 
 class ImageBase(np.ndarray):
     _HANDLED_TYPES: typing.ClassVar[typing.Tuple[typing.Type, ...]]
@@ -18,7 +17,7 @@ class ImageBase(np.ndarray):
     def __new__(  # type: ignore[misc]
         cls, data: npt.ArrayLike, affine: typing.Optional[npt.NDArray] = ...
     ) -> _Image: ...
-    def __array_finalize__(self, obj: _Image) -> None: ...  # type: ignore[override]
+    def __array_finalize__(self, obj: builtins.object) -> None: ...  # type: ignore[override]
     def __array_ufunc__(
         self,
         ufunc: np.ufunc,
