@@ -298,7 +298,9 @@ class DICOMDir:
         paths = ([None] * len(self)) if (no_paths := self.paths is None) else self.paths
         out = [
             (img, pos, path)
-            for img, pos, path, o in zip(self.slices, self.positions, paths, orientations)  # type: ignore[arg-type]
+            for img, pos, path, o in zip(
+                self.slices, self.positions, paths, orientations
+            )
             if o == most_common_orientation
         ]
         new_images, new_positions, new_image_paths = miou.unzip(out)
@@ -346,9 +348,14 @@ class DICOMDir:
         *,
         atol: builtins.float,
     ) -> None:
+        initial_value: typing.Optional[npt._SupportsArray]
         initial_value = getattr(self.slices[0], property_name, None)
         for dataset in self.slices[1:]:
+            value: typing.Optional[npt._SupportsArray]
             value = getattr(dataset, property_name, None)
+            if value is None or initial_value is None:
+                msg = f"All slices must contain the attribute {property_name}"
+                raise mioe.DicomImportException(msg)
             if not np.allclose(value, initial_value, atol=atol):
                 msg = "All slices must have the same value for "
                 msg += f"'{property_name}' within '{atol}': {value} != {initial_value}"
@@ -356,7 +363,8 @@ class DICOMDir:
 
     @staticmethod
     def _is_dicomdir(dataset: pydicom.Dataset) -> builtins.bool:
-        media_sop_class: str = getattr(dataset, "MediaStorageSOPClassUID", None)
+        media_sop_class: typing.Optional[builtins.str]
+        media_sop_class = getattr(dataset, "MediaStorageSOPClassUID", None)
         result: builtins.bool = media_sop_class == "1.2.840.10008.1.3.10"
         return result
 
