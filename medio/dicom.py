@@ -13,6 +13,7 @@ __all__ = [
 import builtins
 import dataclasses
 import functools
+import io
 import logging
 import math
 import operator
@@ -72,7 +73,7 @@ class Cosines:
         warn_msg_cn = f"Column direction cosine's magnitude not quite 1: {self.column}"
         self._validate_value(col_cosine_norm, err_msg_cn, warn_msg_cn, self._almost_one)
 
-    def writable(self, value: builtins.bool = False, /) -> None:
+    def writable(self, value: builtins.bool, /) -> None:
         self.row.flags.writeable = value
         self.column.flags.writeable = value
         self.slice.flags.writeable = value
@@ -178,7 +179,7 @@ class DICOMDir:
     positions: typing.Tuple[builtins.float, ...]
     spacing: builtins.float
     affine: npt.NDArray
-    paths: typing.Optional[typing.Tuple[miot.PathLike, ...]] = None
+    paths: typing.Tuple[miot.PathLike, ...] | None = None
 
     def __len__(self) -> builtins.int:
         length = len(self.slices)
@@ -191,7 +192,7 @@ class DICOMDir:
         cls: typing.Type[DICOMDir],
         datasets: typing.Sequence[pydicom.Dataset],
         *,
-        paths: typing.Optional[typing.Sequence[miot.PathLike]] = None,
+        paths: typing.Sequence[miot.PathLike] | None = None,
         max_nonuniformity: builtins.float = 5e-4,
         fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
@@ -258,10 +259,11 @@ class DICOMDir:
         max_nonuniformity: builtins.float = 5e-4,
         fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
+        encryption_key: builtins.bytes | builtins.str | None = None,
         **zip_kwargs: typing.Any,
     ) -> DICOMDir:
         with zipfile.ZipFile(data_stream, mode="r", **zip_kwargs) as zf:
-            datasets = cls.dicom_datasets_from_zip(zf)
+            datasets = cls.dicom_datasets_from_zip(zf, encryption_key=encryption_key)
         return cls.from_datasets(
             datasets,
             max_nonuniformity=max_nonuniformity,
@@ -272,14 +274,32 @@ class DICOMDir:
     @staticmethod
     def dicom_datasets_from_zip(
         zip_file: zipfile.ZipFile,
+        *,
+        encryption_key: builtins.bytes | builtins.str | None = None,
     ) -> typing.List[pydicom.Dataset]:
+        if encryption_key is not None:
+            try:
+                import cryptography.fernet as crypto
+            except (ModuleNotFoundError, ImportError) as crypto_imp_exn:
+                msg = "If encryption key provided, cryptography package required."
+                raise RuntimeError(msg) from crypto_imp_exn
+            fernet = crypto.Fernet(encryption_key)
+            decrypt = fernet.decrypt
+        else:
+            decrypt = None
         datasets: typing.List[pydicom.Dataset] = []
         for name in zip_file.namelist():
             if name.endswith("/"):
                 continue  # skip directories
             with zip_file.open(name, mode="r") as f:
                 try:
-                    dataset = pydicom.dcmread(f)  # type: ignore[arg-type]
+                    if decrypt is None:
+                        dataset = pydicom.dcmread(f)  # type: ignore[arg-type]
+                    else:
+                        with io.BytesIO() as buffer:
+                            buffer.write(decrypt(f.read()))
+                            buffer.seek(0)
+                            dataset = pydicom.dcmread(buffer)
                     datasets.append(dataset)
                 except pydicom.errors.InvalidDicomError as e:
                     msg = f"Skipping invalid DICOM file '{name}': {e}"
@@ -330,7 +350,7 @@ class DICOMDir:
             self._slice_attribute_equal(property_name)
         self._slice_ndarray_attribute_almost_equal("ImageOrientationPatient", atol=1e-5)
 
-    def writable(self, value: builtins.bool = False, /) -> None:
+    def writable(self, value: builtins.bool, /) -> None:
         self.affine.flags.writeable = value
 
     def _slice_attribute_equal(self, property_name: builtins.str) -> None:
@@ -348,10 +368,10 @@ class DICOMDir:
         *,
         atol: builtins.float,
     ) -> None:
-        initial_value: typing.Optional[npt._SupportsArray]
+        initial_value: npt._SupportsArray | None
         initial_value = getattr(self.slices[0], property_name, None)
         for dataset in self.slices[1:]:
-            value: typing.Optional[npt._SupportsArray]
+            value: npt._SupportsArray | None
             value = getattr(dataset, property_name, None)
             if value is None or initial_value is None:
                 msg = f"All slices must contain the attribute {property_name}"
@@ -363,7 +383,7 @@ class DICOMDir:
 
     @staticmethod
     def _is_dicomdir(dataset: pydicom.Dataset) -> builtins.bool:
-        media_sop_class: typing.Optional[builtins.str]
+        media_sop_class: builtins.str | None
         media_sop_class = getattr(dataset, "MediaStorageSOPClassUID", None)
         result: builtins.bool = media_sop_class == "1.2.840.10008.1.3.10"
         return result
@@ -375,9 +395,9 @@ class DICOMImage(miob.ImageBase):
         cls: typing.Type[DICOMImage],
         dicom_dir: DICOMDir,
         *,
-        rescale: typing.Optional[builtins.bool] = None,
+        rescale: builtins.bool | None = None,
         rescale_dtype: npt.DTypeLike = np.float32,
-        order: typing.Optional[typing.Literal["F", "C"]] = None,
+        order: typing.Literal["F", "C"] | None = None,
     ) -> DICOMImage:
         data = cls._merge_slice_pixel_arrays(
             dicom_dir.slices, rescale=rescale, rescale_dtype=rescale_dtype, order=order
@@ -392,9 +412,9 @@ class DICOMImage(miob.ImageBase):
         max_nonuniformity: builtins.float = 5e-4,
         fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
-        rescale: typing.Optional[builtins.bool] = None,
+        rescale: builtins.bool | None = None,
         rescale_dtype: npt.DTypeLike = np.float32,
-        order: typing.Optional[typing.Literal["F", "C"]] = None,
+        order: typing.Literal["F", "C"] | None = None,
     ) -> DICOMImage:
         dicomdir = DICOMDir.from_path(
             dicom_path,
@@ -414,9 +434,10 @@ class DICOMImage(miob.ImageBase):
         max_nonuniformity: builtins.float = 5e-4,
         fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
-        rescale: typing.Optional[builtins.bool] = None,
+        encryption_key: builtins.bytes | builtins.str | None = None,
+        rescale: builtins.bool | None = None,
         rescale_dtype: npt.DTypeLike = np.float32,
-        order: typing.Optional[typing.Literal["F", "C"]] = None,
+        order: typing.Literal["F", "C"] | None = None,
         **zip_kwargs: typing.Any,
     ) -> DICOMImage:
         dicomdir = DICOMDir.from_zipped_stream(
@@ -424,6 +445,7 @@ class DICOMImage(miob.ImageBase):
             max_nonuniformity=max_nonuniformity,
             fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
             remove_anomalous_images=remove_anomalous_images,
+            encryption_key=encryption_key,
             **zip_kwargs,
         )
         return cls.from_dicomdir(
@@ -435,9 +457,9 @@ class DICOMImage(miob.ImageBase):
         cls: typing.Type[DICOMImage],
         slices: typing.Sequence[pydicom.Dataset],
         *,
-        rescale: typing.Optional[builtins.bool] = None,
+        rescale: builtins.bool | None = None,
         rescale_dtype: npt.DTypeLike = np.float32,
-        order: typing.Optional[typing.Literal["F", "C"]] = None,
+        order: typing.Literal["F", "C"] | None = None,
     ) -> npt.NDArray:
         if rescale is None:
             rescale = any(cls._requires_rescaling(d) for d in slices)

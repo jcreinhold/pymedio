@@ -131,7 +131,7 @@ class Image(miob.ImageBase):
         *,
         dtype: npt.DTypeLike = np.float32,
         gzipped: builtins.bool = False,
-        image_class: typing.Optional[miof.NibabelImageClass] = None,
+        image_class: miof.NibabelImageClass | None = None,
     ) -> Image:
         data, affine = miof.read_image_from_stream(
             data_stream, dtype=dtype, gzipped=gzipped, image_class=image_class
@@ -145,7 +145,7 @@ class Image(miob.ImageBase):
         *,
         dtype: npt.DTypeLike = np.float32,
         gzipped: builtins.bool = False,
-        image_class: typing.Optional[miof.NibabelImageClass] = None,
+        image_class: miof.NibabelImageClass | None = None,
         **zip_kwargs: typing.Any,
     ) -> Image:
         with zipfile.ZipFile(data_stream, "r", **zip_kwargs) as zf:
@@ -181,7 +181,8 @@ class Image(miob.ImageBase):
         max_nonuniformity: builtins.float = 5e-4,
         fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
-        rescale: typing.Optional[builtins.bool] = None,
+        encryption_key: builtins.bytes | builtins.str | None = None,
+        rescale: builtins.bool | None = None,
         rescale_dtype: npt.DTypeLike = np.float32,
     ) -> Image:
         dicom_image = miod.DICOMImage.from_zipped_stream(
@@ -189,6 +190,7 @@ class Image(miob.ImageBase):
             max_nonuniformity=max_nonuniformity,
             fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
             remove_anomalous_images=remove_anomalous_images,
+            encryption_key=encryption_key,
             rescale=rescale,
             rescale_dtype=rescale_dtype,
         )

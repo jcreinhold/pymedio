@@ -1,5 +1,7 @@
 """Tests for `medio` package."""
 
+from __future__ import annotations
+
 import builtins
 import gzip
 import io
@@ -7,6 +9,7 @@ import os
 import pathlib
 import zipfile
 
+import cryptography.fernet as crypto
 import nibabel as nib
 import numpy as np
 import pydicom
@@ -95,6 +98,27 @@ def zipped_dicom_path(
 
 
 @pytest.fixture(scope="session")
+def encryption_key() -> builtins.bytes:
+    return crypto.Fernet.generate_key()
+
+
+@pytest.fixture(scope="session")
+def zipped_encrypted_dicom_path(
+    tmp_path_factory: pytest.TempPathFactory,
+    dicom_image: pydicom.Dataset,
+    encryption_key: builtins.bytes,
+) -> pathlib.Path:
+    zipped_path = tmp_path_factory.getbasetemp().resolve(strict=True) / "dcm.zip"
+    fernet = crypto.Fernet(encryption_key)
+    with io.BytesIO() as buffer:
+        pydicom.dcmwrite(buffer, dicom_image)
+        buffer.seek(0)
+        with zipfile.ZipFile(zipped_path, mode="w") as zf:
+            zf.writestr("test", fernet.encrypt(buffer.getvalue()))
+    return zipped_path
+
+
+@pytest.fixture(scope="session")
 def zipped_nifti_path(
     tmp_path_factory: pytest.TempPathFactory, nifti: nib.Nifti1Image
 ) -> pathlib.Path:
@@ -160,6 +184,14 @@ def test_dicomimage_from_zipped_stream(zipped_dicom_path: pathlib.Path) -> None:
 def test_dicom_image_from_zipped_stream(zipped_dicom_path: pathlib.Path) -> None:
     with open(zipped_dicom_path, "rb") as f:
         image = mioi.Image.from_dicom_zipped_stream(f)
+    assert image.shape == (TEST_IMAGE_SHAPE + (1,))
+
+
+def test_dicom_image_from_zipped_stream_encrypted(
+    zipped_encrypted_dicom_path: pathlib.Path, encryption_key: builtins.bytes
+) -> None:
+    with open(zipped_encrypted_dicom_path, "rb") as f:
+        image = mioi.Image.from_dicom_zipped_stream(f, encryption_key=encryption_key)
     assert image.shape == (TEST_IMAGE_SHAPE + (1,))
 
 
