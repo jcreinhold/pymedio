@@ -110,11 +110,14 @@ def zipped_encrypted_dicom_path(
 ) -> pathlib.Path:
     zipped_path = tmp_path_factory.getbasetemp().resolve(strict=True) / "dcm.zip"
     fernet = crypto.Fernet(encryption_key)
-    with io.BytesIO() as buffer:
-        pydicom.dcmwrite(buffer, dicom_image)
-        buffer.seek(0)
-        with zipfile.ZipFile(zipped_path, mode="w") as zf:
-            zf.writestr("test", fernet.encrypt(buffer.getvalue()))
+    with io.BytesIO() as zip_buffer:
+        with zipfile.ZipFile(zip_buffer, mode="w") as zf:
+            with io.BytesIO() as image_buffer:
+                pydicom.dcmwrite(image_buffer, dicom_image)
+                zf.writestr("test", image_buffer.getvalue())
+        encrypted = fernet.encrypt(zip_buffer.getvalue())
+    with open(zipped_path, "wb") as f:
+        f.write(encrypted)
     return zipped_path
 
 
