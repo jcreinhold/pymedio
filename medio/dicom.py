@@ -262,8 +262,17 @@ class DICOMDir:
         encryption_key: builtins.bytes | builtins.str | None = None,
         **zip_kwargs: typing.Any,
     ) -> DICOMDir:
+        if encryption_key is not None:
+            try:
+                import cryptography.fernet as crypto
+            except (ModuleNotFoundError, ImportError) as crypto_imp_exn:
+                msg = "If encryption key provided, cryptography package required."
+                raise RuntimeError(msg) from crypto_imp_exn
+            fernet = crypto.Fernet(encryption_key)
+            data_stream.seek(0)
+            data_stream = io.BytesIO(fernet.decrypt(data_stream.read()))
         with zipfile.ZipFile(data_stream, mode="r", **zip_kwargs) as zf:
-            datasets = cls.dicom_datasets_from_zip(zf, encryption_key=encryption_key)
+            datasets = cls.dicom_datasets_from_zip(zf)
         return cls.from_datasets(
             datasets,
             max_nonuniformity=max_nonuniformity,
@@ -274,33 +283,14 @@ class DICOMDir:
     @staticmethod
     def dicom_datasets_from_zip(
         zip_file: zipfile.ZipFile,
-        *,
-        encryption_key: builtins.bytes | builtins.str | None = None,
     ) -> typing.List[pydicom.Dataset]:
-        if encryption_key is not None:
-            try:
-                import cryptography.fernet as crypto
-            except (ModuleNotFoundError, ImportError) as crypto_imp_exn:
-                msg = "If encryption key provided, cryptography package required."
-                raise RuntimeError(msg) from crypto_imp_exn
-            fernet = crypto.Fernet(encryption_key)
-            decrypt = fernet.decrypt
-        else:
-            decrypt = None
         datasets: typing.List[pydicom.Dataset] = []
         for name in zip_file.namelist():
             if name.endswith("/"):
                 continue  # skip directories
             with zip_file.open(name, mode="r") as f:
                 try:
-                    if decrypt is None:
-                        dataset = pydicom.dcmread(f)  # type: ignore[arg-type]
-                    else:
-                        with io.BytesIO() as buffer:
-                            buffer.write(decrypt(f.read()))
-                            buffer.seek(0)
-                            dataset = pydicom.dcmread(buffer)
-                    datasets.append(dataset)
+                    datasets.append(pydicom.dcmread(f))  # type: ignore[arg-type]
                 except pydicom.errors.InvalidDicomError as e:
                     msg = f"Skipping invalid DICOM file '{name}': {e}"
                     logger.info(msg)
