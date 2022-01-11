@@ -2,6 +2,11 @@
 History
 =======
 
+0.1.8 (2022-01-11)
+------------------
+
+* Change order of encryption/zipping to reduce file size
+
 0.1.7 (2022-01-04)
 ------------------
 
