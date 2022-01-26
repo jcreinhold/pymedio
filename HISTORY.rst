@@ -2,6 +2,11 @@
 History
 =======
 
+0.1.9 (2022-01-26)
+------------------
+
+* Fixed bug in affine matrix calculation in medio.dicom; now returns same matrix as medio.image
+
 0.1.8 (2022-01-11)
 ------------------
 
