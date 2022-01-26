@@ -1,4 +1,25 @@
-.PHONY: clean clean-test clean-pyc clean-build docs help
+.PHONY: \
+	black \
+	clean \
+	clean-build \
+	clean-pyc \
+	clean-test \
+	coverage \
+	dist \
+	docs \
+	flake8 \
+	format \
+	help \
+	install \
+	isort \
+	mypy \
+	release \
+	security \
+	servedocs \
+	snyk \
+	test \
+	test-all
+
 .DEFAULT_GOAL := help
 
 define BROWSER_PYSCRIPT
@@ -23,8 +44,9 @@ export PRINT_HELP_PYSCRIPT
 
 BROWSER := python -c "$$BROWSER_PYSCRIPT"
 
-help:
-	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
+black:  ## run black formatter on code
+	black medio
+	black tests
 
 clean: clean-build clean-pyc clean-test ## remove all build, test, coverage and Python artifacts
 
@@ -47,20 +69,16 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
 
-lint/flake8: ## check style with flake8
-	flake8 medio tests
-
-test: ## run tests quickly with the default Python
-	pytest
-
-test-all: ## run tests on every Python version with tox
-	tox
-
 coverage: ## check code coverage quickly with the default Python
 	coverage run --source medio -m pytest
 	coverage report -m
 	coverage html
 	$(BROWSER) htmlcov/index.html
+
+dist: clean ## builds source and wheel package
+	python setup.py sdist
+	python setup.py bdist_wheel
+	ls -l dist
 
 docs: ## generate Sphinx HTML documentation, including API docs
 	rm -f docs/medio.rst
@@ -70,27 +88,40 @@ docs: ## generate Sphinx HTML documentation, including API docs
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/html/index.html
 
-servedocs: docs ## compile the docs watching for changes
-	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
+flake8: ## check style with flake8
+	flake8 medio tests
 
-release: dist ## package and upload a release
-	twine upload dist/*
+format: black isort flake8 mypy security ## run various code formatters/checks
 
-dist: clean ## builds source and wheel package
-	python setup.py sdist
-	python setup.py bdist_wheel
-	ls -l dist
+help:
+	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
 
 install: clean ## install the package to the active Python's site-packages
 	python setup.py install
 
-format:  ## run various code formatters/checks
-	black medio
+isort:  ## format imports with isort
 	isort medio
-	mypy medio
-	bandit -r medio -c pyproject.toml
-	black tests
 	isort tests
+
+mypy:  ## typecheck code with mypy
+	mypy medio
 	mypy tests
+
+release: dist ## package and upload a release
+	twine upload dist/*
+
+security:  ## run various security checks on code
+	bandit -r medio -c pyproject.toml
 	bandit -r tests -c pyproject.toml
+
+servedocs: docs ## compile the docs watching for changes
+	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
+
+snyk:  ## run snyk on to check requirements
 	snyk test --file=requirements_dev.txt --package-manager=pip --fail-on=all
+
+test: ## run tests quickly with the default Python
+	pytest
+
+test-all: ## run tests on every Python version with tox
+	tox

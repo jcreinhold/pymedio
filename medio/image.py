@@ -108,10 +108,7 @@ class Image(miob.ImageBase):
         size = np.asarray(self.shape)
         center_index = (size - 1) / 2
         r, a, s = nib.affines.apply_affine(self.affine, center_index)
-        if lps:
-            return -r, -a, s
-        else:
-            return r, a, s
+        return (-r, -a, s) if lps else (r, a, s)
 
     @classmethod
     def from_path(

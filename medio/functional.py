@@ -240,10 +240,8 @@ def _write_sitk(
 ) -> None:
     path = pathlib.Path(path)
     if path.suffix in (".png", ".jpg", ".jpeg", ".bmp"):
-        warnings.warn(
-            f"Casting to uint8 before saving to {path}",
-            RuntimeWarning,
-        )
+        msg = f"Casting to uint8 before saving to {path}"
+        warnings.warn(msg, RuntimeWarning)
         array = array.astype(np.uint8)
     image = array_to_sitk(array, affine, is_multichannel=is_multichannel)
     sitk.WriteImage(image, str(path), use_compression)
@@ -381,17 +379,17 @@ def sitk_to_array(
 
 
 def get_ras_affine_from_sitk(
-    sitk_object: sitk.Image | sitk.ImageFileReader,
+    sitk_object: sitk.Image | sitk.ImageFileReader, *, dtype: npt.DTypeLike = np.float64
 ) -> npt.NDArray:
-    spacing = np.asanyarray(sitk_object.GetSpacing())
-    direction_lps = np.asanyarray(sitk_object.GetDirection())
-    origin_lps = np.asanyarray(sitk_object.GetOrigin())
+    spacing = np.asanyarray(sitk_object.GetSpacing(), dtype=dtype)
+    direction_lps = np.asanyarray(sitk_object.GetDirection(), dtype=dtype)
+    origin_lps = np.asanyarray(sitk_object.GetOrigin(), dtype=dtype)
     direction_length = len(direction_lps)
     if direction_length == 9:
         rotation_lps = direction_lps.reshape(3, 3)
     elif direction_length == 4:  # ignore last dimension if 2D (1, W, H, 1)
         rotation_lps_2d = direction_lps.reshape(2, 2)
-        rotation_lps = np.eye(3)
+        rotation_lps = np.eye(3, dtype=dtype)
         rotation_lps[:2, :2] = rotation_lps_2d
         spacing = np.append(spacing, 1)
         origin_lps = np.append(origin_lps, 0)
@@ -405,7 +403,7 @@ def get_ras_affine_from_sitk(
     rotation_ras = np.dot(_flipxy_33, rotation_lps)
     rotation_ras_zoom = rotation_ras * spacing
     translation_ras = np.dot(_flipxy_33, origin_lps)
-    affine = np.eye(4)
+    affine = np.eye(4, dtype=dtype)
     affine[:3, :3] = rotation_ras_zoom
     affine[:3, 3] = translation_ras
     return affine
