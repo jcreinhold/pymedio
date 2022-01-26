@@ -184,6 +184,7 @@ def test_affine_in_image_vs_dicomimage(dicom_image_dir: pathlib.Path) -> None:
     assert np.allclose(
         dcm_image.affine, image.affine
     ), f"\n{dcm_image.affine}\n\n{image.affine}"
+    assert dcm_image.shape == image.shape
 
 
 def test_dicomimage_from_zipped_stream(zipped_dicom_path: pathlib.Path) -> None:
