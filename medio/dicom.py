@@ -47,10 +47,11 @@ class Cosines:
 
     @classmethod
     def from_orientation(
-        cls: typing.Type[Cosines], image_orientation: typing.List[builtins.float]
+        cls: typing.Type[Cosines],
+        image_orientation: typing.Sequence[builtins.float] | npt.NDArray,
     ) -> Cosines:
-        row_cosine = np.asanyarray(image_orientation[:3])
-        column_cosine = np.asanyarray(image_orientation[3:])
+        row_cosine = np.asanyarray(image_orientation[:3], dtype=np.float64)
+        column_cosine = np.asanyarray(image_orientation[3:], dtype=np.float64)
         slice_cosine = np.cross(row_cosine, column_cosine)
         cosines = cls(row_cosine, column_cosine, slice_cosine)
         cosines.validate()
@@ -118,7 +119,9 @@ class SortedSlices:
     ) -> SortedSlices:
         """sort list of pydicom datasets into the correct order"""
         assert slice_datasets, "slice_datasets empty"
-        image_orientation = slice_datasets[0].ImageOrientationPatient
+        image_orientation = np.asanyarray(
+            slice_datasets[0].ImageOrientationPatient, dtype=np.float64
+        )
         cosines = Cosines.from_orientation(image_orientation)
         cs = cosines.slice
         positions = [np.dot(cs, d.ImagePositionPatient).item() for d in slice_datasets]
@@ -151,6 +154,10 @@ class SortedSlices:
                     warnings.warn(msg)
 
     @functools.cached_property
+    def patient_position(self) -> npt.NDArray:
+        return np.asanyarray(self.slices[0].ImagePositionPatient, dtype=np.float64)
+
+    @functools.cached_property
     def slice_spacing(self) -> builtins.float:
         spacing: builtins.float
         if len(self) > 1:
@@ -165,12 +172,15 @@ class SortedSlices:
     @functools.cached_property
     def affine(self) -> npt.NDArray:
         row_spacing, column_spacing = self.slices[0].PixelSpacing
-        transform = np.identity(4, dtype=np.float32)
+        transform = np.identity(4, dtype=np.float64)
+        slice_spacing = self.slice_spacing or 1.0
         transform[:3, 0] = self.cosines.row * column_spacing
         transform[:3, 1] = self.cosines.column * row_spacing
-        transform[:3, 2] = self.cosines.slice * self.slice_spacing
-        transform[:3, 3] = self.positions[0]
-        return transform
+        transform[:3, 2] = self.cosines.slice * slice_spacing
+        transform[:3, 3] = self.patient_position
+        _flipxy_44 = miou.flipxy_44()
+        transform_ras: npt.NDArray = np.dot(_flipxy_44, transform)
+        return transform_ras
 
 
 @dataclasses.dataclass(frozen=True)
@@ -237,7 +247,7 @@ class DICOMDir:
         elif (
             not isinstance(dicom_path, (builtins.str, pathlib.Path))
             and miou.is_iterable(dicom_path)
-            and all(str(p).endswith(".dcm") for p in dicom_path)  # type: ignore[union-attr]
+            and all(str(p).endswith(".dcm") for p in dicom_path)  # type: ignore[union-attr]  # noqa: E501
         ):
             paths = tuple(dicom_path)  # type: ignore[arg-type]
         else:

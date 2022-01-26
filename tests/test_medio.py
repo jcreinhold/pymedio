@@ -178,6 +178,14 @@ def test_dicomimage_from_path(dicom_image_dir: pathlib.Path) -> None:
     assert image.shape == (TEST_IMAGE_SHAPE + (NUM_DUPLICATES,))
 
 
+def test_affine_in_image_vs_dicomimage(dicom_image_dir: pathlib.Path) -> None:
+    dcm_image = miod.DICOMImage.from_path(dicom_image_dir)
+    image = mioi.Image.from_path(dicom_image_dir)
+    assert np.allclose(
+        dcm_image.affine, image.affine
+    ), f"\n{dcm_image.affine}\n\n{image.affine}"
+
+
 def test_dicomimage_from_zipped_stream(zipped_dicom_path: pathlib.Path) -> None:
     with open(zipped_dicom_path, "rb") as f:
         image = miod.DICOMImage.from_zipped_stream(f)
@@ -227,6 +235,7 @@ def test_nifti_gzipped_image_from_zipped_stream(
     assert image.shape == NIFTI_IMAGE_SHAPE
 
 
+# flake8: noqa: E501
 def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     image = miod.DICOMImage.from_path(dicom_image_dir)
     assert image.shape == (TEST_IMAGE_SHAPE + (NUM_DUPLICATES,))
@@ -234,7 +243,7 @@ def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     image += 1.0
     image *= image
     assert isinstance(image, miod.DICOMImage)
-    s = f"DICOMImage(shape: (128, 128, {NUM_DUPLICATES}); spacing: (0.66, 0.66, 0.00); dtype: float32)"
+    s = f"DICOMImage(shape: (128, 128, {NUM_DUPLICATES}); spacing: (0.66, 0.66, 1.00); dtype: float32)"
     assert str(image) == s
     mask = image == 0.0
     assert isinstance(mask, miod.DICOMImage)
@@ -242,10 +251,11 @@ def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     assert isinstance(subimage, miod.DICOMImage)
     image = image.astype(np.float16)
     assert isinstance(image, miod.DICOMImage)
-    s = f"DICOMImage(shape: (128, 128, {NUM_DUPLICATES}); spacing: (0.66, 0.66, 0.00); dtype: float16)"
+    s = f"DICOMImage(shape: (128, 128, {NUM_DUPLICATES}); spacing: (0.66, 0.66, 1.00); dtype: float16)"
     assert str(image) == s
 
 
+# flake8: noqa: E501
 def test_numpy_ufuncs_on_image(image: mioi.Image) -> None:
     image += 1.0
     mask = image == 1.0
@@ -268,6 +278,7 @@ def test_numpy_ufuncs_on_image(image: mioi.Image) -> None:
     assert isinstance(image, mioi.Image)
     _image2 = image.view(np.ndarray)
     assert isinstance(image, np.ndarray)
+    assert isinstance(_image2, np.ndarray)
 
 
 @pytest.mark.skipif(torch is None, reason="Requires torch")

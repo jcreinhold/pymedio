@@ -31,7 +31,7 @@ class ImageBase(np.ndarray):
     def __new__(
         cls: typing.Type[_Image],
         data: npt.ArrayLike,
-        affine: typing.Optional[npt.NDArray] = None,
+        affine: npt.NDArray | None = None,
     ) -> _Image:
         obj = cls._check_data(data).view(cls)
         obj._affine = cls._check_affine(affine)
@@ -64,13 +64,12 @@ class ImageBase(np.ndarray):
         *inputs: typing.Any,
         **kwargs: typing.Any,
     ) -> typing.Any:
-        """https://numpy.org/doc/stable/reference/generated/numpy.lib.mixins.NDArrayOperatorsMixin.html"""
         out = kwargs.get("out", ())
         for x in inputs + out:
             if not isinstance(x, self._HANDLED_TYPES + (self.__class__,)):
                 return NotImplemented
         affine = self.affine
-        is_cls = lambda y: isinstance(y, self.__class__)
+        is_cls = lambda y: isinstance(y, self.__class__)  # noqa: E731
         ufunc_args = tuple(x.view(np.ndarray) if is_cls(x) else x for x in inputs)
         if out:
             kwargs["out"] = tuple(x.view(np.ndarray) if is_cls(x) else x for x in out)
@@ -132,25 +131,23 @@ class ImageBase(np.ndarray):
         return data
 
     @staticmethod
-    def _check_affine(affine: typing.Optional[npt.NDArray]) -> npt.NDArray:
+    def _check_affine(affine: npt.NDArray | None) -> npt.NDArray:
         if affine is None:
-            return np.eye(4)
+            return np.eye(4, dtype=np.float64)
         if not isinstance(affine, np.ndarray):
             bad_type = type(affine)
             raise TypeError(f"Affine must be a NumPy array, not {bad_type}")
         if affine.shape != (4, 4):
             bad_shape = affine.shape
             raise ValueError(f"Affine shape must be (4, 4), not {bad_shape}")
-        return affine
+        return affine.astype(dtype=np.float64)
 
     def to_npz(self, file: miot.PathLike | typing.BinaryIO) -> None:
         np.savez_compressed(file, data=self.view(np.ndarray), affine=self.affine)
 
     @classmethod
     def from_npz(
-        cls: typing.Type[_Image],
-        file: miot.PathLike | typing.BinaryIO,
-        **np_load_kwargs,
+        cls, file: miot.PathLike | typing.BinaryIO, **np_load_kwargs
     ) -> _Image:
         _data = np.load(file, **np_load_kwargs)
         return cls(_data["data"], affine=_data["affine"])

@@ -2,6 +2,8 @@
 Author: Jacob Reinhold <jcreinhold@gmail.com>
 """
 
+from __future__ import annotations
+
 __all__ = [
     "check_uint_to_int",
     "ensure_4d",
@@ -24,12 +26,12 @@ import medio.typing as miot
 
 # Matrices used to switch between LPS and RAS
 def flipxy_33() -> npt.NDArray:
-    matrix: npt.NDArray = np.diag([-1, -1, 1])
+    matrix: npt.NDArray = np.diag((-1.0, -1.0, 1.0)).astype(np.float64)
     return matrix
 
 
 def flipxy_44() -> npt.NDArray:
-    matrix: npt.NDArray = np.diag([-1, -1, 1, 1])
+    matrix: npt.NDArray = np.diag((-1.0, -1.0, 1.0, 1.0)).astype(np.float64)
     return matrix
 
 
@@ -92,7 +94,7 @@ def get_metadata_from_ras_affine(
 
 
 def ensure_4d(
-    array: npt.NDArray, *, num_spatial_dims: typing.Optional[builtins.int] = None
+    array: npt.NDArray, *, num_spatial_dims: builtins.int | None = None
 ) -> npt.NDArray:
     """for PyTorch"""
     num_dimensions = array.ndim
