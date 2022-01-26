@@ -140,7 +140,7 @@ class ImageBase(np.ndarray):
         if affine.shape != (4, 4):
             bad_shape = affine.shape
             raise ValueError(f"Affine shape must be (4, 4), not {bad_shape}")
-        return affine.astype(dtype=np.float64)
+        return affine.astype(dtype=np.float64, copy=False)
 
     def to_npz(self, file: miot.PathLike | typing.BinaryIO) -> None:
         np.savez_compressed(file, data=self.view(np.ndarray), affine=self.affine)

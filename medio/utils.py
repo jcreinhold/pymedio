@@ -25,14 +25,17 @@ import medio.typing as miot
 
 
 # Matrices used to switch between LPS and RAS
-def flipxy_33() -> npt.NDArray:
-    matrix: npt.NDArray = np.diag((-1.0, -1.0, 1.0)).astype(np.float64)
+def _create_flip_matrix(elements: typing.Tuple[builtins.float, ...]) -> npt.NDArray:
+    matrix: npt.NDArray = np.diag(elements).astype(np.float64, copy=False)
     return matrix
+
+
+def flipxy_33() -> npt.NDArray:
+    return _create_flip_matrix((-1.0, -1.0, 1.0))
 
 
 def flipxy_44() -> npt.NDArray:
-    matrix: npt.NDArray = np.diag((-1.0, -1.0, 1.0, 1.0)).astype(np.float64)
-    return matrix
+    return _create_flip_matrix((-1.0, -1.0, 1.0, 1.0))
 
 
 def is_iterable(x: typing.Any) -> builtins.bool:
@@ -72,8 +75,8 @@ def get_metadata_from_ras_affine(
     origin_lps = np.dot(_flipxy_33, origin_ras)
     direction_lps = np.dot(_flipxy_33, direction_ras)
     if is_2d:  # ignore orientation if 2D (1, W, H, 1)
-        direction_lps = np.diag((-1, -1)).astype(np.float64)
-        direction_ras = np.diag((1, 1)).astype(np.float64)
+        direction_lps = np.diag((-1.0, -1.0)).astype(np.float64, copy=False)
+        direction_ras = np.diag((1.0, 1.0)).astype(np.float64, copy=False)
     origin_array = origin_lps if lps else origin_ras
     direction_array = direction_lps if lps else direction_ras
     direction_array = direction_array.flatten()

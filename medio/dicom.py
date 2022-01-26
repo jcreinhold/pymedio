@@ -479,7 +479,7 @@ class DICOMImage(miob.ImageBase):
         )
 
         for k, dataset in enumerate(slices):
-            pixel_array = dataset.pixel_array.T.astype(voxels_dtype)
+            pixel_array = dataset.pixel_array.T.astype(voxels_dtype, copy=False)
             if rescale:
                 slope = float(getattr(dataset, "RescaleSlope", 1.0))
                 intercept = float(getattr(dataset, "RescaleIntercept", 0.0))

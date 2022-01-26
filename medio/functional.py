@@ -124,7 +124,7 @@ def _read_nibabel(
     if data.ndim == 5:
         data = data[..., 0, :]
         data = data.transpose(3, 0, 1, 2)
-    affine = img.affine
+    affine = img.affine.astype(np.float64, copy=False)
     return data, affine
 
 
@@ -242,7 +242,7 @@ def _write_sitk(
     if path.suffix in (".png", ".jpg", ".jpeg", ".bmp"):
         msg = f"Casting to uint8 before saving to {path}"
         warnings.warn(msg, RuntimeWarning)
-        array = array.astype(np.uint8)
+        array = array.astype(dtype=np.uint8, copy=False)
     image = array_to_sitk(array, affine, is_multichannel=is_multichannel)
     sitk.WriteImage(image, str(path), use_compression)
 
@@ -292,12 +292,12 @@ def _read_itk_matrix(path: miot.PathLike) -> npt.NDArray:
     """Read an affine transform in ITK's .tfm format"""
     transform = sitk.ReadTransform(str(path))
     parameters = transform.GetParameters()
-    rotation_parameters = parameters[:9]
-    rotation_matrix = np.array(rotation_parameters).reshape(3, 3)
-    translation_parameters = parameters[9:]
-    translation_vector = np.array(translation_parameters).reshape(3, 1)
+    rotation_params = parameters[:9]
+    rotation_matrix = np.asarray(rotation_params, dtype=np.float64).reshape(3, 3)
+    translation_params = parameters[9:]
+    translation_vector = np.asarray(translation_params, dtype=np.float64).reshape(3, 1)
     matrix = np.hstack([rotation_matrix, translation_vector])
-    homogeneous_matrix_lps = np.vstack([matrix, [0, 0, 0, 1]])
+    homogeneous_matrix_lps = np.vstack([matrix, [0.0, 0.0, 0.0, 1.0]])
     homogeneous_matrix_ras = _from_itk_convention(homogeneous_matrix_lps)
     return homogeneous_matrix_ras
 
@@ -381,9 +381,9 @@ def sitk_to_array(
 def get_ras_affine_from_sitk(
     sitk_object: sitk.Image | sitk.ImageFileReader, *, dtype: npt.DTypeLike = np.float64
 ) -> npt.NDArray:
-    spacing = np.asanyarray(sitk_object.GetSpacing(), dtype=dtype)
-    direction_lps = np.asanyarray(sitk_object.GetDirection(), dtype=dtype)
-    origin_lps = np.asanyarray(sitk_object.GetOrigin(), dtype=dtype)
+    spacing = np.asarray(sitk_object.GetSpacing(), dtype=dtype)
+    direction_lps = np.asarray(sitk_object.GetDirection(), dtype=dtype)
+    origin_lps = np.asarray(sitk_object.GetOrigin(), dtype=dtype)
     direction_length = len(direction_lps)
     if direction_length == 9:
         rotation_lps = direction_lps.reshape(3, 3)
