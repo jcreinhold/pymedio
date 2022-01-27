@@ -2,6 +2,13 @@
 History
 =======
 
+0.2.0 (2022-01-27)
+------------------
+
+* Renamed import to pymedio from medio to avoid confusion with medio
+* Renamed ImageBase to BasicImage because it can be used by itself
+* Fixed another bug in affine matrix calculation in pymedio.dicom for consistency with ITK
+
 0.1.9 (2022-01-26)
 ------------------
 

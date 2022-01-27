@@ -1,1 +1,1 @@
-"""Unit test package for medio."""
+"""Unit test package for pymedio."""

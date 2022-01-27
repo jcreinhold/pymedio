@@ -28,12 +28,12 @@ import numpy.typing as npt
 try:
     import nibabel as nib
     import SimpleITK as sitk
-except (ModuleNotFoundError, ImportError) as exn:
-    msg = f"NiBabel and SimpleITK must be installed to use {__name__}."
-    raise RuntimeError(msg) from exn
+except ImportError as imp_exn:
+    imp_exn_msg = f"NiBabel and SimpleITK must be installed to use {__name__}."
+    raise ImportError(imp_exn_msg) from imp_exn
 
-import medio.typing as miot
-import medio.utils as miou
+import pymedio.typing as miot
+import pymedio.utils as miou
 
 # Image formats that are typically 2D
 _2d_formats = [".jpg", ".jpeg", ".bmp", ".png", ".tif", ".tiff"]
@@ -124,7 +124,7 @@ def _read_nibabel(
     if data.ndim == 5:
         data = data[..., 0, :]
         data = data.transpose(3, 0, 1, 2)
-    affine = img.affine.astype(np.float64, copy=False)
+    affine = miou.to_f64(img.affine)
     return data, affine
 
 
@@ -293,9 +293,9 @@ def _read_itk_matrix(path: miot.PathLike) -> npt.NDArray:
     transform = sitk.ReadTransform(str(path))
     parameters = transform.GetParameters()
     rotation_params = parameters[:9]
-    rotation_matrix = np.asarray(rotation_params, dtype=np.float64).reshape(3, 3)
+    rotation_matrix = miou.to_f64(rotation_params).reshape(3, 3)
     translation_params = parameters[9:]
-    translation_vector = np.asarray(translation_params, dtype=np.float64).reshape(3, 1)
+    translation_vector = miou.to_f64(translation_params).reshape(3, 1)
     matrix = np.hstack([rotation_matrix, translation_vector])
     homogeneous_matrix_lps = np.vstack([matrix, [0.0, 0.0, 0.0, 1.0]])
     homogeneous_matrix_ras = _from_itk_convention(homogeneous_matrix_lps)
@@ -340,7 +340,7 @@ def array_to_sitk(
     """Create a SimpleITK image from an array and a 4x4 affine matrix."""
     ndim = array.ndim
     array = np.asanyarray(array)
-    affine = np.asanyarray(affine, dtype=np.float64)
+    affine = miou.to_f64(affine)
     image = sitk.GetImageFromArray(array.transpose(), isVector=is_multichannel)
     is_2d = (ndim == 3 and is_multichannel) or (ndim == 2 and not is_multichannel)
     origin, spacing, direction = miou.get_metadata_from_ras_affine(
@@ -354,9 +354,12 @@ def array_to_sitk(
     offset = 1 if is_multichannel else 0
     if is_multichannel:
         num_components = array.shape[0]
-        assert image.GetNumberOfComponentsPerPixel() == num_components
+        if (_n_comp := image.GetNumberOfComponentsPerPixel()) != num_components:
+            msg = f"sitk components {_n_comp} != array components {num_components}"
+            raise RuntimeError(msg)
     spatial_dims = array.shape[offset : offset + num_spatial_dims]
-    assert image.GetSize() == spatial_dims, f"{image.GetSize()} != {spatial_dims}"
+    if image.GetSize() != spatial_dims:
+        raise RuntimeError(f"{image.GetSize()} != {spatial_dims}")
     return image
 
 
@@ -372,8 +375,8 @@ def sitk_to_array(
         num_components = data.shape[-1]
         data = data[0]
         data = data.transpose(3, 0, 1, 2)
-    if num_components > 1:
-        assert data.shape[0] == num_components, f"{data.shape[0]} != {num_components}"
+    if num_components > 1 and data.shape[0] != num_components:
+        raise RuntimeError(f"{data.shape[0]} != {num_components}")
     affine = get_ras_affine_from_sitk(image)
     return data, affine
 

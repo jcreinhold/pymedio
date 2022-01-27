@@ -65,7 +65,7 @@ extras, then you can open it with:
 
 .. code-block:: python
 
-    import medio.dicom as miod
+    import pymedio.dicom as miod
     image = miod.DICOMImage.from_path("dicom_dir")
 
 This uses `pydicom <https://github.com/pydicom/pydicom>`_ as a backend to open the image à la
@@ -75,7 +75,7 @@ If you have a NIfTI image at ``image.nii``, and you installed the package with `
 
 .. code-block:: python
 
-    import medio.image as mioi
+    import pymedio.image as mioi
     image = mioi.Image.from_path("image.nii")
 
 In either case, you can proceed to work with the image data like a normal numpy array, e.g.,
@@ -107,7 +107,7 @@ Then, in a more resource-constrained environment, you can install pymedio withou
 
 .. code-block:: python
 
-    from medio.base import ImageBase as Image
+    from pymedio.base import ImageBase as Image
     f16_image = Image.from_npz("image-f16.npz")
     print(f16_image.affine)
 
@@ -116,7 +116,7 @@ you can then do, e.g.,
 
 .. code-block:: python
 
-    import medio.image as mioi
+    import pymedio.image as mioi
     image = mioi.Image.from_npz("image-f16.npz")
     image.astype(np.float32).save("image.nii.gz")
 

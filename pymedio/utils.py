@@ -12,6 +12,7 @@ __all__ = [
     "get_metadata_from_ras_affine",
     "get_rotation_and_spacing_from_affine",
     "is_iterable",
+    "to_f64",
     "unzip",
 ]
 
@@ -21,12 +22,12 @@ import typing
 import numpy as np
 import numpy.typing as npt
 
-import medio.typing as miot
+import pymedio.typing as miot
 
 
 # Matrices used to switch between LPS and RAS
 def _create_flip_matrix(elements: typing.Tuple[builtins.float, ...]) -> npt.NDArray:
-    matrix: npt.NDArray = np.diag(elements).astype(np.float64, copy=False)
+    matrix: npt.NDArray = to_f64(np.diag(elements))
     return matrix
 
 
@@ -75,8 +76,8 @@ def get_metadata_from_ras_affine(
     origin_lps = np.dot(_flipxy_33, origin_ras)
     direction_lps = np.dot(_flipxy_33, direction_ras)
     if is_2d:  # ignore orientation if 2D (1, W, H, 1)
-        direction_lps = np.diag((-1.0, -1.0)).astype(np.float64, copy=False)
-        direction_ras = np.diag((1.0, 1.0)).astype(np.float64, copy=False)
+        direction_lps = to_f64(np.diag((-1.0, -1.0)))
+        direction_ras = to_f64(np.diag((1.0, 1.0)))
     origin_array = origin_lps if lps else origin_ras
     direction_array = direction_lps if lps else direction_ras
     direction_array = direction_array.flatten()
@@ -128,7 +129,8 @@ def ensure_4d(
     else:
         message = f"{num_dimensions}D images not supported yet."
         raise NotImplementedError(message)
-    assert array.ndim == 4
+    if array.ndim != 4:
+        raise RuntimeError("array couldn't be shaped to 4 dimensions")
     return array
 
 
@@ -140,3 +142,8 @@ def check_uint_to_int(array: npt.NDArray) -> npt.NDArray:
         return array.astype(np.int64)
     else:
         return array
+
+
+def to_f64(seq: npt.ArrayLike) -> npt.NDArray[np.float64]:
+    """convert a sequence to a float64 array"""
+    return np.asanyarray(seq, dtype=np.float64)

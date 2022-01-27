@@ -2,6 +2,6 @@
 Usage
 =====
 
-To use medio in a project::
+To use pymedio in a project::
 
-    import medio
+    import pymedio

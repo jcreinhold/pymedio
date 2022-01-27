@@ -8,13 +8,13 @@ Installation
 Stable release
 --------------
 
-To install medio, run this command in your terminal:
+To install pymedio, run this command in your terminal:
 
 .. code-block:: console
 
-    $ pip install medio
+    $ pip install pymedio
 
-This is the preferred method to install medio, as it will always install the most recent stable release.
+This is the preferred method to install pymedio, as it will always install the most recent stable release.
 
 If you don't have `pip`_ installed, this `Python installation guide`_ can guide
 you through the process.
@@ -22,23 +22,22 @@ you through the process.
 .. _pip: https://pip.pypa.io
 .. _Python installation guide: http://docs.python-guide.org/en/latest/starting/installation/
 
+From source code
+----------------
 
-From sources
-------------
-
-The sources for medio can be downloaded from the `Github repo`_.
+The source code for pymedio can be downloaded from the `Github repo`_.
 
 You can either clone the public repository:
 
 .. code-block:: console
 
-    $ git clone git://github.com/jcreinhold/medio
+    $ git clone git://github.com/jcreinhold/pymedio
 
 Or download the `tarball`_:
 
 .. code-block:: console
 
-    $ curl -OJL https://github.com/jcreinhold/medio/tarball/master
+    $ curl -OJL https://github.com/jcreinhold/pymedio/tarball/master
 
 Once you have a copy of the source, you can install it with:
 
@@ -47,5 +46,5 @@ Once you have a copy of the source, you can install it with:
     $ python setup.py install
 
 
-.. _Github repo: https://github.com/jcreinhold/medio
-.. _tarball: https://github.com/jcreinhold/medio/tarball/master
+.. _Github repo: https://github.com/jcreinhold/pymedio
+.. _tarball: https://github.com/jcreinhold/pymedio/tarball/master

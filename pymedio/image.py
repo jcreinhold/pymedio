@@ -19,17 +19,17 @@ import numpy.typing as npt
 try:
     import nibabel as nib
     import SimpleITK as sitk
-except (ModuleNotFoundError, ImportError) as imp_exn:
-    msg = f"NiBabel and SimpleITK must be installed to use {__name__}."
-    raise RuntimeError(msg) from imp_exn
+except ImportError as imp_exn:
+    imp_exn_msg = f"NiBabel and SimpleITK must be installed to use {__name__}."
+    raise ImportError(imp_exn_msg) from imp_exn
 
-import medio.base as miob
-import medio.dicom as miod
-import medio.functional as miof
-import medio.typing as miot
+import pymedio.base as miob
+import pymedio.dicom as miod
+import pymedio.functional as miof
+import pymedio.typing as miot
 
 
-class Image(miob.ImageBase):
+class Image(miob.BasicImage):
     @property
     def str_properties(self) -> typing.List[builtins.str]:
         props = super().str_properties

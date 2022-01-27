@@ -4,14 +4,14 @@ import typing
 import numpy as np
 import numpy.typing as npt
 
-import medio.typing as miot
+import pymedio.typing as miot
 
 _UfuncMethod = typing.Literal[
     "__call__", "reduce", "reduceat", "accumulate", "outer", "inner"
 ]
-_Image = typing.TypeVar("_Image", bound="ImageBase")
+_Image = typing.TypeVar("_Image", bound="BasicImage")
 
-class ImageBase(np.ndarray):
+class BasicImage(np.ndarray):
     _HANDLED_TYPES: typing.ClassVar[typing.Tuple[typing.Type, ...]]
     _affine: npt.NDArray
     def __new__(  # type: ignore[misc]

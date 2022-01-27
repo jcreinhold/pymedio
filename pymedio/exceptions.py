@@ -13,3 +13,7 @@ class DicomImportException(MedIOException):
 
 class OutsideMaxNonUniformity(MedIOException):
     ...
+
+
+class MissingSlicesException(MedIOException):
+    ...
