@@ -45,7 +45,7 @@ export PRINT_HELP_PYSCRIPT
 BROWSER := python -c "$$BROWSER_PYSCRIPT"
 
 black:  ## run black formatter on code
-	black medio
+	black pymedio
 	black tests
 
 clean: clean-build clean-pyc clean-test ## remove all build, test, coverage and Python artifacts
@@ -70,7 +70,7 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr .pytest_cache
 
 coverage: ## check code coverage quickly with the default Python
-	coverage run --source medio -m pytest
+	coverage run --source pymedio -m pytest
 	coverage report -m
 	coverage html
 	$(BROWSER) htmlcov/index.html
@@ -81,15 +81,15 @@ dist: clean ## builds source and wheel package
 	ls -l dist
 
 docs: ## generate Sphinx HTML documentation, including API docs
-	rm -f docs/medio.rst
+	rm -f docs/pymedio.rst
 	rm -f docs/modules.rst
-	sphinx-apidoc -o docs/ medio
+	sphinx-apidoc -o docs/ pymedio
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/html/index.html
 
 flake8: ## check style with flake8
-	flake8 medio tests
+	flake8 pymedio tests
 
 format: black isort flake8 mypy security ## run various code formatters/checks
 
@@ -100,18 +100,18 @@ install: clean ## install the package to the active Python's site-packages
 	python setup.py install
 
 isort:  ## format imports with isort
-	isort medio
+	isort pymedio
 	isort tests
 
 mypy:  ## typecheck code with mypy
-	mypy medio
+	mypy pymedio
 	mypy tests
 
 release: dist ## package and upload a release
 	twine upload dist/*
 
 security:  ## run various security checks on code
-	bandit -r medio -c pyproject.toml
+	bandit -r pymedio -c pyproject.toml
 	bandit -r tests -c pyproject.toml
 
 servedocs: docs ## compile the docs watching for changes

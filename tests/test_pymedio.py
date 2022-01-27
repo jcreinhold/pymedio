@@ -5,7 +5,6 @@ from __future__ import annotations
 import builtins
 import gzip
 import io
-import os
 import pathlib
 import zipfile
 
@@ -17,18 +16,25 @@ import pytest
 import SimpleITK as sitk
 from pydicom.data import get_testdata_file
 
-import medio.dicom as miod
-import medio.image as mioi
+import pymedio.dicom as miod
+import pymedio.image as mioi
 
 try:
     import torch
-except (ModuleNotFoundError, ImportError):
+except ImportError:
     torch = None  # type: ignore[assignment]
 
-NUM_DUPLICATES = 2
+try:
+    import torchio as tio  # type: ignore[import]
+except ImportError:
+    tio = None
+
+
 TEST_IMAGE_NAME = "CT_small.dcm"
 TEST_IMAGE_SHAPE = (128, 128)
+NUM_DUPLICATES = 5
 NIFTI_IMAGE_SHAPE = (2, 2, 2)
+DIST = 1e-05
 
 
 @pytest.fixture(scope="session")
@@ -43,8 +49,13 @@ def dicom_image_dir(
     tmp_path_factory: pytest.TempPathFactory, dicom_image_path: pathlib.Path
 ) -> pathlib.Path:
     dcm_dir = tmp_path_factory.mktemp("dicom").resolve(strict=True)
+    path = dicom_image_path.resolve(strict=True)
+    dcm = pydicom.dcmread(str(path))
+    position = dcm.ImagePositionPatient
     for i in range(NUM_DUPLICATES):
-        os.symlink(dicom_image_path.resolve(strict=True), dcm_dir / f"{i}.dcm")
+        position[2] += DIST
+        dcm.ImagePositionPatient = position
+        pydicom.dcmwrite(dcm_dir / f"{i}.dcm", dcm)
     return dcm_dir
 
 
@@ -181,10 +192,19 @@ def test_dicomimage_from_path(dicom_image_dir: pathlib.Path) -> None:
 def test_affine_in_image_vs_dicomimage(dicom_image_dir: pathlib.Path) -> None:
     dcm_image = miod.DICOMImage.from_path(dicom_image_dir)
     image = mioi.Image.from_path(dicom_image_dir)
+    assert dcm_image.shape == image.shape
     assert np.allclose(
         dcm_image.affine, image.affine
-    ), f"\n{dcm_image.affine}\n\n{image.affine}"
-    assert dcm_image.shape == image.shape
+    ), f"\nDICOMImage:\n{dcm_image.affine}\nImage:\n{image.affine}"
+
+
+@pytest.mark.skipif(tio is None, reason="Requires torchio")
+def test_affine_vs_tio(dicom_image_dir: pathlib.Path) -> None:
+    dcm_image = miod.DICOMImage.from_path(dicom_image_dir)
+    image = mioi.Image.from_path(dicom_image_dir)
+    tio_image = tio.ScalarImage(dicom_image_dir)
+    assert np.allclose(image.affine, tio_image.affine)
+    assert np.allclose(dcm_image.affine, tio_image.affine)
 
 
 def test_dicomimage_from_zipped_stream(zipped_dicom_path: pathlib.Path) -> None:
@@ -244,7 +264,7 @@ def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     image += 1.0
     image *= image
     assert isinstance(image, miod.DICOMImage)
-    s = f"DICOMImage(shape: (128, 128, {NUM_DUPLICATES}); spacing: (0.66, 0.66, 1.00); dtype: float32)"
+    s = f"DICOMImage(shape: ({TEST_IMAGE_SHAPE[0]}, {TEST_IMAGE_SHAPE[1]}, {NUM_DUPLICATES}); spacing: (0.66, 0.66, {DIST}); dtype: float32)"
     assert str(image) == s
     mask = image == 0.0
     assert isinstance(mask, miod.DICOMImage)
@@ -252,7 +272,7 @@ def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     assert isinstance(subimage, miod.DICOMImage)
     image = image.astype(np.float16)
     assert isinstance(image, miod.DICOMImage)
-    s = f"DICOMImage(shape: (128, 128, {NUM_DUPLICATES}); spacing: (0.66, 0.66, 1.00); dtype: float16)"
+    s = f"DICOMImage(shape: ({TEST_IMAGE_SHAPE[0]}, {TEST_IMAGE_SHAPE[1]}, {NUM_DUPLICATES}); spacing: (0.66, 0.66, {DIST}); dtype: float16)"
     assert str(image) == s
 
 
@@ -268,10 +288,10 @@ def test_numpy_ufuncs_on_image(image: mioi.Image) -> None:
     image = image[0:2]
     assert isinstance(image, mioi.Image)
     image[0:2] = 0.0
-    s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1.00, 1.00, 1.00); dtype: float32; orientation: RAS+)"
+    s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1, 1, 1); dtype: float32; orientation: RAS+)"
     assert str(image) == s
     _image = np.squeeze(image).astype(np.float16)
-    s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1.00, 1.00, 1.00); dtype: float16; orientation: RAS+)"
+    s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1, 1, 1); dtype: float16; orientation: RAS+)"
     assert str(_image) == s
     image = image.ravel()
     assert isinstance(image, mioi.Image)

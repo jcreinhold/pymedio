@@ -1,7 +1,7 @@
-medio
-=====
+pymedio
+=======
 
 .. toctree::
    :maxdepth: 4
 
-   medio
+   pymedio

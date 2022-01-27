@@ -4,7 +4,7 @@ Author: Jacob Reinhold <jcreinhold@gmail.com>
 
 from __future__ import annotations
 
-__all__ = ["ImageBase"]
+__all__ = ["BasicImage"]
 
 import builtins
 import numbers
@@ -14,16 +14,16 @@ import warnings
 import numpy as np
 import numpy.typing as npt
 
-import medio.typing as miot
-import medio.utils as miou
+import pymedio.typing as miot
+import pymedio.utils as miou
 
 _UfuncMethod = typing.Literal[
     "__call__", "reduce", "reduceat", "accumulate", "outer", "inner"
 ]
-_Image = typing.TypeVar("_Image", bound="ImageBase")
+_Image = typing.TypeVar("_Image", bound="BasicImage")
 
 
-class ImageBase(np.ndarray):
+class BasicImage(np.ndarray):
 
     _HANDLED_TYPES = (np.ndarray, numbers.Number)
     _affine: npt.NDArray
@@ -116,7 +116,7 @@ class ImageBase(np.ndarray):
         return mem
 
     def get_spacing_string(self) -> builtins.str:
-        strings = [f"{n:.2f}" for n in self.spacing]
+        strings = [f"{n:.2g}" for n in self.spacing]
         string = f'({", ".join(strings)})'
         return string
 
@@ -140,7 +140,7 @@ class ImageBase(np.ndarray):
         if affine.shape != (4, 4):
             bad_shape = affine.shape
             raise ValueError(f"Affine shape must be (4, 4), not {bad_shape}")
-        return affine.astype(dtype=np.float64, copy=False)
+        return miou.to_f64(affine)
 
     def to_npz(self, file: miot.PathLike | typing.BinaryIO) -> None:
         np.savez_compressed(file, data=self.view(np.ndarray), affine=self.affine)

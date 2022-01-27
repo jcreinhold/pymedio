@@ -1,5 +1,5 @@
-Welcome to medio's documentation!
-======================================
+Welcome to pymedio's documentation!
+===================================
 
 .. toctree::
    :maxdepth: 2

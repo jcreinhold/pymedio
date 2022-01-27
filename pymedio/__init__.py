@@ -1,8 +1,8 @@
-"""Top-level package for medio."""
+"""Top-level package for pymedio."""
 
 import logging
 
-__title__ = "medio"
+__title__ = "pymedio"
 __description__ = "read arbitrary medical image formats in python"
 __url__ = "https://github.com/jcreinhold/pymedio"
 __author__ = """Jacob Reinhold"""

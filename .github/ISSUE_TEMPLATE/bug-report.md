@@ -1,6 +1,6 @@
 ---
 name: "\U0001F41B Bug Report"
-about: Submit a bug report to help improve medio
+about: Submit a bug report to help improve pymedio
 
 ---
 
@@ -24,9 +24,9 @@ Steps to reproduce the behavior:
 
 ## Environment
 
- - medio version (e.g., 0.1.14):
+ - pymedio version (e.g., 0.1.14):
  - OS (e.g., Linux):
- - How you installed medio (e.g., `pip` or source):
+ - How you installed pymedio (e.g., `pip` or source):
  - Build command you used (if installed from source):
  - Python version:
  - Any other relevant information:
