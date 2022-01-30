@@ -103,6 +103,9 @@ class Image(miob.BasicImage):
             squeeze=squeeze,
         )
 
+    def to_filename(self, path: miot.PathLike) -> None:
+        self.save(path, squeeze=False)
+
     def get_center(self, lps: builtins.bool = False) -> miot.TripletFloat:
         """Get image center in RAS+ or LPS+ coordinates"""
         size = np.asarray(self.shape)
