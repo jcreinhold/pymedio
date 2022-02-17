@@ -2,6 +2,12 @@
 History
 =======
 
+0.2.1 (2022-02-17)
+------------------
+
+* Change ``to_npz`` method in ``BasicImage`` to use ``.base`` to avoid new memory allocation
+* Add pre-commit hooks and modify files according to them
+
 0.2.0 (2022-01-27)
 ------------------
 
