@@ -10,6 +10,8 @@ __all__ = [
     "Direction",
     "PathLike",
     "Shape",
+    "ShapeLike",
+    "SupportsArray",
     "TripletFloat",
 ]
 
@@ -40,4 +42,10 @@ Direction3D = typing.Tuple[
 Direction = typing.Union[Direction2D, Direction3D]
 PathLike = typing.Union[builtins.str, os.PathLike]
 Shape = typing.Tuple[builtins.int, ...]
+ShapeLike = typing.Union[typing.SupportsIndex, typing.Sequence[typing.SupportsIndex]]
 TripletFloat = typing.Tuple[builtins.float, builtins.float, builtins.float]
+
+
+class SupportsArray(typing.Protocol):
+    def __array__(self) -> npt.NDArray:
+        ...

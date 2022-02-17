@@ -19,17 +19,6 @@ from pydicom.data import get_testdata_file
 import pymedio.dicom as miod
 import pymedio.image as mioi
 
-try:
-    import torch
-except ImportError:
-    torch = None  # type: ignore[assignment]
-
-try:
-    import torchio as tio  # type: ignore[import]
-except ImportError:
-    tio = None
-
-
 TEST_IMAGE_NAME = "CT_small.dcm"
 TEST_IMAGE_SHAPE = (128, 128)
 NUM_DUPLICATES = 5
@@ -66,7 +55,7 @@ def dicom_image(dicom_image_path: pathlib.Path) -> pydicom.Dataset:
 
 @pytest.fixture(scope="session")
 def nifti() -> nib.Nifti1Image:
-    data = np.random.randn(*NIFTI_IMAGE_SHAPE).astype(np.float32)
+    data: np.ndarray = np.random.randn(*NIFTI_IMAGE_SHAPE).astype(np.float32)
     return nib.Nifti1Image(data, np.eye(4))
 
 
@@ -198,8 +187,8 @@ def test_affine_in_image_vs_dicomimage(dicom_image_dir: pathlib.Path) -> None:
     ), f"\nDICOMImage:\n{dcm_image.affine}\nImage:\n{image.affine}"
 
 
-@pytest.mark.skipif(tio is None, reason="Requires torchio")
 def test_affine_vs_tio(dicom_image_dir: pathlib.Path) -> None:
+    tio = pytest.importorskip("torchio")
     dcm_image = miod.DICOMImage.from_path(dicom_image_dir)
     image = mioi.Image.from_path(dicom_image_dir)
     tio_image = tio.ScalarImage(dicom_image_dir)
@@ -290,7 +279,7 @@ def test_numpy_ufuncs_on_image(image: mioi.Image) -> None:
     image[0:2] = 0.0
     s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1, 1, 1); dtype: float32; orientation: RAS+)"
     assert str(image) == s
-    _image = np.squeeze(image).astype(np.float16)
+    _image: mioi.Image = np.squeeze(image).astype(np.float16)  # type: ignore[assignment]
     s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1, 1, 1); dtype: float16; orientation: RAS+)"
     assert str(_image) == s
     image = image.ravel()
@@ -302,8 +291,8 @@ def test_numpy_ufuncs_on_image(image: mioi.Image) -> None:
     assert isinstance(_image2, np.ndarray)
 
 
-@pytest.mark.skipif(torch is None, reason="Requires torch")
 def test_convert_to_torch(image: mioi.Image) -> None:
+    torch = pytest.importorskip("torch")
     torch.as_tensor(image.torch_compatible())
 
 

@@ -296,8 +296,8 @@ def _read_itk_matrix(path: miot.PathLike) -> npt.NDArray:
     rotation_matrix = miou.to_f64(rotation_params).reshape(3, 3)
     translation_params = parameters[9:]
     translation_vector = miou.to_f64(translation_params).reshape(3, 1)
-    matrix = np.hstack([rotation_matrix, translation_vector])
-    homogeneous_matrix_lps = np.vstack([matrix, [0.0, 0.0, 0.0, 1.0]])
+    matrix: np.ndarray = np.hstack([rotation_matrix, translation_vector])
+    homogeneous_matrix_lps: np.ndarray = np.vstack([matrix, [0.0, 0.0, 0.0, 1.0]])
     homogeneous_matrix_ras = _from_itk_convention(homogeneous_matrix_lps)
     return homogeneous_matrix_ras
 
@@ -367,7 +367,7 @@ def sitk_to_array(
     image: sitk.Image, *, dtype: npt.DTypeLike = np.float32
 ) -> miot.DataAffine:
     array_view = sitk.GetArrayViewFromImage(image)
-    data = np.asanyarray(array_view, dtype=dtype).transpose()
+    data: np.ndarray = np.asarray(array_view, dtype=dtype).transpose()
     num_components = image.GetNumberOfComponentsPerPixel()
     input_spatial_dims = image.GetDimension()
     if input_spatial_dims == 5:  # probably a bad NIfTI (1, sx, sy, sz, c)
@@ -384,9 +384,9 @@ def sitk_to_array(
 def get_ras_affine_from_sitk(
     sitk_object: sitk.Image | sitk.ImageFileReader, *, dtype: npt.DTypeLike = np.float64
 ) -> npt.NDArray:
-    spacing = np.asarray(sitk_object.GetSpacing(), dtype=dtype)
-    direction_lps = np.asarray(sitk_object.GetDirection(), dtype=dtype)
-    origin_lps = np.asarray(sitk_object.GetOrigin(), dtype=dtype)
+    spacing: np.ndarray = np.asarray(sitk_object.GetSpacing(), dtype=dtype)
+    direction_lps: np.ndarray = np.asarray(sitk_object.GetDirection(), dtype=dtype)
+    origin_lps: np.ndarray = np.asarray(sitk_object.GetOrigin(), dtype=dtype)
     direction_length = len(direction_lps)
     if direction_length == 9:
         rotation_lps = direction_lps.reshape(3, 3)
@@ -406,7 +406,7 @@ def get_ras_affine_from_sitk(
     rotation_ras = np.dot(_flipxy_33, rotation_lps)
     rotation_ras_zoom = rotation_ras * spacing
     translation_ras = np.dot(_flipxy_33, origin_lps)
-    affine = np.eye(4, dtype=dtype)
+    affine: np.ndarray = np.eye(4, dtype=dtype)
     affine[:3, :3] = rotation_ras_zoom
     affine[:3, 3] = translation_ras
     return affine
