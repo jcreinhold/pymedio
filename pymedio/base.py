@@ -143,7 +143,7 @@ class BasicImage(np.ndarray):
         return miou.to_f64(affine)
 
     def to_npz(self, file: miot.PathLike | typing.BinaryIO) -> None:
-        np.savez_compressed(file, data=self.view(np.ndarray), affine=self.affine)
+        np.savez_compressed(file, data=self.base, affine=self.affine)
 
     @classmethod
     def from_npz(
