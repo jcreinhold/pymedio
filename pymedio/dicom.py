@@ -70,7 +70,7 @@ class Cosines:
             raise ValueError("image_orientation must be seq. floats with len=6.")
         row_cosine = miou.to_f64(image_orientation[:3])
         column_cosine = miou.to_f64(image_orientation[3:])
-        slice_cosine = np.cross(row_cosine, column_cosine)
+        slice_cosine: np.ndarray = np.cross(row_cosine, column_cosine)
         cosines = cls(row_cosine, column_cosine, slice_cosine)
         cosines.writable(False)
         cosines.validate()
@@ -189,6 +189,7 @@ class SortedSlices:
         to_float_tuple = lambda xs: tuple(float(x) for x in xs)  # noqa: E731
         orientations = [to_float_tuple(s.ImageOrientationPatient) for s in self.slices]
         if strict_unique:
+            unq_oris: np.ndarray
             unq_oris, counts = np.unique(orientations, axis=0, return_counts=True)
             most_common_orientation = unq_oris[np.argmax(counts)]
         else:
@@ -233,7 +234,7 @@ class SortedSlices:
     @functools.cached_property
     def affine(self) -> npt.NDArray:
         row_spacing, column_spacing = self.slices[0].PixelSpacing
-        transform = np.identity(4, dtype=np.float64)
+        transform: np.ndarray = np.identity(4, dtype=np.float64)
         slice_spacing = self.slice_spacing or 1.0
         transform[:3, 0] = self.cosines.row * column_spacing
         transform[:3, 1] = self.cosines.column * row_spacing
@@ -449,10 +450,10 @@ class DICOMDir:
         *,
         atol: builtins.float,
     ) -> None:
-        initial_value: npt._SupportsArray | None
+        initial_value: miot.SupportsArray | None
         initial_value = getattr(self.slices[0], property_name, None)
         for dataset in self.slices[1:]:
-            value: npt._SupportsArray | None
+            value: miot.SupportsArray | None
             value = getattr(dataset, property_name, None)
             if value is None or initial_value is None:
                 msg = f"All slices must contain the attribute {property_name}"

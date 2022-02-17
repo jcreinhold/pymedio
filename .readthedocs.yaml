@@ -3,8 +3,8 @@
 # See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
 version: 2
 sphinx:
-   configuration: docs/conf.py
+  configuration: docs/conf.py
 formats:
-   - pdf
+- pdf
 python:
-   version: "3.8"
+  version: "3.8"

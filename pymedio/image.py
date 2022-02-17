@@ -47,7 +47,7 @@ class Image(miob.BasicImage):
     def bounds(self) -> npt.NDArray:
         """Position of centers of voxels in smallest and largest indices."""
         ini = 0, 0, 0
-        fin = np.asarray(self.shape) - 1
+        fin: np.ndarray = np.asarray(self.shape) - 1
         point_ini = nib.affines.apply_affine(self.affine, ini)
         point_fin = nib.affines.apply_affine(self.affine, fin)
         return np.asarray((point_ini, point_fin))
@@ -88,10 +88,10 @@ class Image(miob.BasicImage):
     def get_bounds(self) -> miot.Bounds:
         """Get minimum and maximum world coordinates occupied by the image."""
         first_index = 3 * (-0.5,)
-        last_index = np.asarray(self.shape) - 0.5
+        last_index: np.ndarray = np.asarray(self.shape) - 0.5
         first_point = nib.affines.apply_affine(self.affine, first_index)
         last_point = nib.affines.apply_affine(self.affine, last_index)
-        array = np.asarray((first_point, last_point))
+        array: np.ndarray = np.asarray((first_point, last_point))
         bounds_x, bounds_y, bounds_z = array.T.tolist()
         return bounds_x, bounds_y, bounds_z
 
@@ -108,7 +108,7 @@ class Image(miob.BasicImage):
 
     def get_center(self, lps: builtins.bool = False) -> miot.TripletFloat:
         """Get image center in RAS+ or LPS+ coordinates"""
-        size = np.asarray(self.shape)
+        size: np.ndarray = np.asarray(self.shape)
         center_index = (size - 1) / 2
         r, a, s = nib.affines.apply_affine(self.affine, center_index)
         return (-r, -a, s) if lps else (r, a, s)

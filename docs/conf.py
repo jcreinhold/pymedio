@@ -17,8 +17,11 @@
 # relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
 #
+
+import builtins
 import os
 import sys
+import typing
 
 sys.path.insert(0, os.path.abspath(".."))
 
@@ -29,7 +32,7 @@ autodoc_mock_imports = [
     "SimpleITK",
 ]
 
-import pymedio
+import pymedio  # noqa: E402
 
 # -- General configuration ---------------------------------------------
 
@@ -116,7 +119,7 @@ htmlhelp_basename = "pymediodoc"
 
 # -- Options for LaTeX output ------------------------------------------
 
-latex_elements = {
+latex_elements: typing.Dict[builtins.str, typing.Any] = {
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',
