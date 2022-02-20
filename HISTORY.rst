@@ -2,6 +2,11 @@
 History
 =======
 
+0.2.3 (2022-02-20)
+------------------
+
+* Revert to use ``.view(np.ndarray)`` to fix accidental mutation of original array
+
 0.2.2 (2022-02-20)
 ------------------
 
