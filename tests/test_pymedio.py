@@ -150,7 +150,7 @@ def zipped_nifti_gzipped_path(
 
 @pytest.fixture
 def image() -> mioi.Image:
-    return mioi.Image(np.zeros(NIFTI_IMAGE_SHAPE, dtype=np.float32))
+    return mioi.Image(np.ones(NIFTI_IMAGE_SHAPE, dtype=np.float32))
 
 
 def test_dicomdir_from_path(dicom_image_dir: pathlib.Path) -> None:
@@ -248,45 +248,52 @@ def test_nifti_gzipped_image_from_zipped_stream(
 # flake8: noqa: E501
 def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     image = miod.DICOMImage.from_path(dicom_image_dir)
+    image_arr: np.ndarray = np.array(image)
     assert image.shape == (TEST_IMAGE_SHAPE + (NUM_DUPLICATES,))
     image = image + 0.0
     image += 1.0
     image *= image
     assert isinstance(image, miod.DICOMImage)
+    assert np.all(image == (image_arr + 1.0) ** 2)
     s = f"DICOMImage(shape: ({TEST_IMAGE_SHAPE[0]}, {TEST_IMAGE_SHAPE[1]}, {NUM_DUPLICATES}); spacing: (0.66, 0.66, {DIST}); dtype: float32)"
     assert str(image) == s
     mask = image == 0.0
     assert isinstance(mask, miod.DICOMImage)
     subimage = image[:20, :20, :]
     assert isinstance(subimage, miod.DICOMImage)
-    image = image.astype(np.float16)
+    image = image.astype(np.float64)
+    assert np.allclose(image, (image_arr + 1.0) ** 2)
     assert isinstance(image, miod.DICOMImage)
-    s = f"DICOMImage(shape: ({TEST_IMAGE_SHAPE[0]}, {TEST_IMAGE_SHAPE[1]}, {NUM_DUPLICATES}); spacing: (0.66, 0.66, {DIST}); dtype: float16)"
+    s = f"DICOMImage(shape: ({TEST_IMAGE_SHAPE[0]}, {TEST_IMAGE_SHAPE[1]}, {NUM_DUPLICATES}); spacing: (0.66, 0.66, {DIST}); dtype: float64)"
     assert str(image) == s
 
 
 # flake8: noqa: E501
 def test_numpy_ufuncs_on_image(image: mioi.Image) -> None:
     image += 1.0
-    mask = image == 1.0
+    mask: mioi.Image = image > 1.0
     assert isinstance(mask, mioi.Image)
     assert np.all(mask)
     image *= image
-    assert np.all(image == 1.0)
+    assert np.all(image == 4.0)
     assert isinstance(image, mioi.Image)
     image = image[0:2]
     assert isinstance(image, mioi.Image)
-    image[0:2] = 0.0
+    image[0:2] += 1.0
     s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1, 1, 1); dtype: float32; orientation: RAS+)"
     assert str(image) == s
     _image: mioi.Image = np.squeeze(image).astype(np.float16)  # type: ignore[assignment]
+    assert np.all(_image >= 4.0)
     s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1, 1, 1); dtype: float16; orientation: RAS+)"
     assert str(_image) == s
     image = image.ravel()
+    assert np.all(image >= 4.0)
     assert isinstance(image, mioi.Image)
     image = image.view(mioi.Image)
+    assert np.all(image >= 4.0)
     assert isinstance(image, mioi.Image)
     _image2 = image.view(np.ndarray)
+    assert np.all(_image2 >= 4.0)
     assert isinstance(image, np.ndarray)
     assert isinstance(_image2, np.ndarray)
 
@@ -305,7 +312,9 @@ def test_save_image(
 
 def test_save_image_npz(image: mioi.Image) -> None:
     with io.BytesIO() as buffer:
+        assert np.all(image == 1.0)
         image.to_npz(buffer)
+        assert np.all(image == 1.0)
         buffer.seek(0)
         new_image: mioi.Image = mioi.Image.from_npz(buffer)
         assert np.all(image == new_image)

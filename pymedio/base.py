@@ -143,7 +143,7 @@ class BasicImage(np.ndarray):
         return miou.to_f64(affine)
 
     def to_npz(self, file: miot.PathLike | typing.BinaryIO) -> None:
-        np.savez_compressed(file, data=self.view(np.ndarray), affine=self.affine)
+        np.savez_compressed(file, data=np.array(self), affine=self.affine)
 
     @classmethod
     def from_npz(
@@ -153,4 +153,4 @@ class BasicImage(np.ndarray):
         return cls(_data["data"], affine=_data["affine"])
 
     def torch_compatible(self) -> npt.NDArray:
-        return miou.ensure_4d(miou.check_uint_to_int(self.view(np.ndarray)))
+        return miou.ensure_4d(miou.check_uint_to_int(np.array(self)))
