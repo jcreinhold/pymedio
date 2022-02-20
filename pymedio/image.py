@@ -97,7 +97,7 @@ class Image(miob.BasicImage):
 
     def save(self, path: miot.PathLike, *, squeeze: builtins.bool = True) -> None:
         miof.write_image(
-            self.view(np.ndarray),
+            self.__array__(),
             self.affine,
             path,
             squeeze=squeeze,
@@ -198,7 +198,7 @@ class Image(miob.BasicImage):
 
     def to_sitk(self, **kwargs: builtins.bool) -> sitk.Image:
         """Get the image as an instance of :class:`sitk.Image`."""
-        return miof.array_to_sitk(self.view(np.ndarray), self.affine, **kwargs)
+        return miof.array_to_sitk(self.__array__(), self.affine, **kwargs)
 
     def to_nibabel(self) -> nib.Nifti1Image:
-        return nib.Nifti1Image(self.view(np.ndarray), self.affine)
+        return nib.Nifti1Image(self.__array__(), self.affine)
