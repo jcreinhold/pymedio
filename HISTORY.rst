@@ -2,6 +2,11 @@
 History
 =======
 
+0.2.4 (2022-02-20)
+------------------
+
+* Copy when saving image because mutation occuring that makes it unsafe otherwise
+
 0.2.3 (2022-02-20)
 ------------------
 
