@@ -2,6 +2,12 @@
 History
 =======
 
+0.2.2 (2022-02-20)
+------------------
+
+* Change ``to_npz`` method in ``BasicImage`` to use ``__array__`` to fix bug when saving slice
+* Fix various mypy issues in the BasicImage stubs
+
 0.2.1 (2022-02-17)
 ------------------
 
