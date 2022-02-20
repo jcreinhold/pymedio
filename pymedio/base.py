@@ -70,9 +70,9 @@ class BasicImage(np.ndarray):
                 return NotImplemented
         affine = self.affine
         is_cls = lambda y: isinstance(y, self.__class__)  # noqa: E731
-        ufunc_args = tuple(x.__array__() if is_cls(x) else x for x in inputs)
+        ufunc_args = tuple(x.view(np.ndarray) if is_cls(x) else x for x in inputs)
         if out:
-            kwargs["out"] = tuple(x.__array__() if is_cls(x) else x for x in out)
+            kwargs["out"] = tuple(x.view(np.ndarray) if is_cls(x) else x for x in out)
             if len(out) == 1 and is_cls(out[0]):
                 affine = out[0].affine
         result = getattr(ufunc, method)(*ufunc_args, **kwargs)
@@ -143,7 +143,7 @@ class BasicImage(np.ndarray):
         return miou.to_f64(affine)
 
     def to_npz(self, file: miot.PathLike | typing.BinaryIO) -> None:
-        np.savez_compressed(file, data=self.__array__(), affine=self.affine)
+        np.savez_compressed(file, data=self.view(np.ndarray), affine=self.affine)
 
     @classmethod
     def from_npz(
@@ -153,4 +153,4 @@ class BasicImage(np.ndarray):
         return cls(_data["data"], affine=_data["affine"])
 
     def torch_compatible(self) -> npt.NDArray:
-        return miou.ensure_4d(miou.check_uint_to_int(self.__array__()))
+        return miou.ensure_4d(miou.check_uint_to_int(self.view(np.ndarray)))
