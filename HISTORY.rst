@@ -2,6 +2,11 @@
 History
 =======
 
+0.2.5 (2022-02-20)
+------------------
+
+* Copy when creating new ``BasicImage`` by default, because (unexpectedly) unsafe otherwise.
+
 0.2.4 (2022-02-20)
 ------------------
 
