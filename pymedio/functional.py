@@ -62,16 +62,16 @@ logger = logging.getLogger(__name__)
 def read_image(
     path: miot.PathLike,
     *,
-    dtype: npt.DTypeLike = np.float32,
-    mmap: builtins.bool = False,
-) -> miot.DataAffine:
+    dtype: typing.Type[miot.DType] | None = None,
+    eager: builtins.bool = True,
+) -> miot.DataAffine[miot.DType]:
     try:
-        result = _read_sitk(path, dtype=dtype)
+        result = _read_sitk(path, dtype=dtype, copy=eager)
     except RuntimeError as exn1:  # try with NiBabel
         message = f"Error loading image with SimpleITK:\n{exn1}\n\nTrying NiBabel..."
         warnings.warn(message)
         try:
-            result = _read_nibabel(path, dtype=dtype, mmap=mmap)
+            result = _read_nibabel(path, dtype=dtype, mmap=not eager)
         except nib.loadsave.ImageFileError as exn2:
             message = (
                 f"File '{path}' not understood."
@@ -86,10 +86,10 @@ def read_image(
 def read_image_from_stream(
     stream: typing.BinaryIO,
     *,
-    dtype: npt.DTypeLike = np.float32,
+    dtype: typing.Type[miot.DType] | None = None,
     gzipped: builtins.bool = False,
     image_class: typing.Optional[NibabelImageClass] = None,
-) -> miot.DataAffine:
+) -> miot.DataAffine[miot.DType]:
     """https://mail.python.org/pipermail/neuroimaging/2017-February/001345.html"""
     _stream = gzip.GzipFile(fileobj=stream) if gzipped else stream
     fh = nib.FileHolder(fileobj=_stream)
@@ -116,9 +116,9 @@ def read_image_from_stream(
 def _read_nibabel(
     path: miot.PathLike,
     *,
-    dtype: npt.DTypeLike = np.float32,
+    dtype: typing.Type[miot.DType] | None = None,
     mmap: builtins.bool = False,
-) -> miot.DataAffine:
+) -> miot.DataAffine[miot.DType]:
     img = nib.load(str(path), mmap=mmap)
     data = img.get_fdata(dtype=dtype)
     if data.ndim == 5:
@@ -129,13 +129,16 @@ def _read_nibabel(
 
 
 def _read_sitk(
-    path: miot.PathLike, *, dtype: npt.DTypeLike = np.float32
-) -> miot.DataAffine:
+    path: miot.PathLike,
+    *,
+    dtype: typing.Type[miot.DType] | None = None,
+    copy: builtins.bool = True,
+) -> miot.DataAffine[miot.DType]:
     if pathlib.Path(path).is_dir():  # assume DICOM
         image = _read_dicom_sitk(path)
     else:
         image = sitk.ReadImage(str(path))
-    data, affine = sitk_to_array(image, dtype=dtype)
+    data, affine = sitk_to_array(image, dtype=dtype, copy=copy)
     return data, affine
 
 
@@ -169,9 +172,9 @@ def read_shape(path: miot.PathLike) -> miot.Shape:
     return shape
 
 
-def read_affine(path: miot.PathLike) -> npt.NDArray:
+def read_affine(path: miot.PathLike) -> npt.NDArray[np.float64]:
     reader = get_reader(path)
-    affine = get_ras_affine_from_sitk(reader)
+    affine: npt.NDArray[np.float64] = get_ras_affine_from_sitk(reader)
     return affine
 
 
@@ -247,7 +250,7 @@ def _write_sitk(
     sitk.WriteImage(image, str(path), use_compression)
 
 
-def read_matrix(path: miot.PathLike) -> npt.NDArray:
+def read_matrix(path: miot.PathLike) -> npt.NDArray[np.float64]:
     """Read an affine transform and return array"""
     path = pathlib.Path(path)
     suffix = path.suffix
@@ -270,7 +273,7 @@ def write_matrix(matrix: npt.NDArray, path: miot.PathLike) -> None:
         _write_niftyreg_matrix(matrix, path)
 
 
-def _to_itk_convention(matrix: npt.NDArray) -> npt.NDArray:
+def _to_itk_convention(matrix: npt.NDArray) -> npt.NDArray[np.float64]:
     """RAS to LPS"""
     _flipxy_44 = miou.flipxy_44()
     matrix = np.dot(_flipxy_44, matrix)
@@ -279,7 +282,7 @@ def _to_itk_convention(matrix: npt.NDArray) -> npt.NDArray:
     return matrix
 
 
-def _from_itk_convention(matrix: npt.NDArray) -> npt.NDArray:
+def _from_itk_convention(matrix: npt.NDArray) -> npt.NDArray[np.float64]:
     """LPS to RAS"""
     _flipxy_44 = miou.flipxy_44()
     matrix = np.dot(matrix, _flipxy_44)
@@ -288,7 +291,7 @@ def _from_itk_convention(matrix: npt.NDArray) -> npt.NDArray:
     return matrix
 
 
-def _read_itk_matrix(path: miot.PathLike) -> npt.NDArray:
+def _read_itk_matrix(path: miot.PathLike) -> npt.NDArray[np.float64]:
     """Read an affine transform in ITK's .tfm format"""
     transform = sitk.ReadTransform(str(path))
     parameters = transform.GetParameters()
@@ -318,9 +321,9 @@ def _matrix_to_itk_transform(
     return transform
 
 
-def _read_niftyreg_matrix(trsf_path: miot.PathLike) -> npt.NDArray:
+def _read_niftyreg_matrix(path: miot.PathLike) -> npt.NDArray[np.float64]:
     """Read a NiftyReg matrix and return it as a torch.Tensor"""
-    matrix: np.ndarray = np.loadtxt(trsf_path)
+    matrix: np.ndarray = np.loadtxt(path, dtype=np.float64)
     matrix = np.linalg.inv(matrix)
     return matrix
 
@@ -364,10 +367,13 @@ def array_to_sitk(
 
 
 def sitk_to_array(
-    image: sitk.Image, *, dtype: npt.DTypeLike = np.float32
-) -> miot.DataAffine:
-    array_view = sitk.GetArrayViewFromImage(image)
-    data: np.ndarray = np.asarray(array_view, dtype=dtype).transpose()
+    image: sitk.Image,
+    *,
+    dtype: typing.Type[miot.DType] | None = None,
+    copy: builtins.bool = True,
+) -> miot.DataAffine[miot.DType]:
+    arr = sitk.GetArrayFromImage(image) if copy else sitk.GetArrayViewFromImage(image)
+    data: np.ndarray = np.asarray(arr, dtype=dtype).transpose()
     num_components = image.GetNumberOfComponentsPerPixel()
     input_spatial_dims = image.GetDimension()
     if input_spatial_dims == 5:  # probably a bad NIfTI (1, sx, sy, sz, c)
@@ -377,13 +383,17 @@ def sitk_to_array(
         data = data.transpose(3, 0, 1, 2)
     if num_components > 1 and data.shape[0] != num_components:
         raise RuntimeError(f"{data.shape[0]} != {num_components}")
-    affine = get_ras_affine_from_sitk(image)
+    affine: npt.NDArray[np.float64] = get_ras_affine_from_sitk(image)
     return data, affine
 
 
 def get_ras_affine_from_sitk(
-    sitk_object: sitk.Image | sitk.ImageFileReader, *, dtype: npt.DTypeLike = np.float64
-) -> npt.NDArray:
+    sitk_object: sitk.Image | sitk.ImageFileReader,
+    *,
+    dtype: typing.Type[miot.DType] | None = None,
+) -> npt.NDArray[miot.DType]:
+    if dtype is None:
+        dtype = np.float64  # type: ignore[assignment]
     spacing: np.ndarray = np.asarray(sitk_object.GetSpacing(), dtype=dtype)
     direction_lps: np.ndarray = np.asarray(sitk_object.GetDirection(), dtype=dtype)
     origin_lps: np.ndarray = np.asarray(sitk_object.GetOrigin(), dtype=dtype)

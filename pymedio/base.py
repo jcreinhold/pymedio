@@ -22,7 +22,7 @@ _UfuncMethod = typing.Literal[
 _Image = typing.TypeVar("_Image", bound="BasicImage")
 
 
-class BasicImage(np.ndarray):
+class BasicImage(npt.NDArray[miot.DType]):
 
     _affine: npt.NDArray
 
@@ -30,9 +30,9 @@ class BasicImage(np.ndarray):
         cls: typing.Type[_Image],
         data: npt.ArrayLike,
         affine: npt.NDArray | None = None,
-        copy: builtins.bool = True,
+        *,
+        copy: builtins.bool = False,
     ) -> _Image:
-        """CAUTION: if copy false, some np funcs unexpectedly mutate original array"""
         obj = cls._check_data(data, copy=copy).view(cls)
         obj._affine = cls._check_affine(affine)
         obj._affine.flags.writeable = False
@@ -107,7 +107,7 @@ class BasicImage(np.ndarray):
         return results[0] if len(results) == 1 else results
 
     @property
-    def affine(self) -> npt.NDArray:
+    def affine(self) -> npt.NDArray[np.float64]:
         return self._affine
 
     @affine.setter
@@ -120,18 +120,18 @@ class BasicImage(np.ndarray):
         return direction
 
     @property
-    def spacing(self) -> typing.Tuple[builtins.float, ...]:
+    def spacing(self) -> typing.Tuple[miot.Float, ...]:
         """Voxel spacing in mm."""
         _, spacing = miou.get_rotation_and_spacing_from_affine(self.affine)
         return tuple(spacing)
 
     @property
-    def origin(self) -> typing.Tuple[builtins.float, ...]:
+    def origin(self) -> typing.Tuple[miot.Float, ...]:
         """Center of first voxel in array, in mm."""
         return tuple(self.affine[:3, 3])
 
     @property
-    def memory(self) -> builtins.int:
+    def memory(self) -> miot.Int:
         """Number of Bytes that the tensor takes in the RAM."""
         mem: builtins.int = np.prod(self.shape) * self.itemsize
         return mem
@@ -152,7 +152,7 @@ class BasicImage(np.ndarray):
         return data
 
     @staticmethod
-    def _check_affine(affine: npt.NDArray | None) -> npt.NDArray:
+    def _check_affine(affine: npt.NDArray | None) -> npt.NDArray[np.float64]:
         if affine is None:
             return np.eye(4, dtype=np.float64)
         if not isinstance(affine, np.ndarray):
@@ -164,7 +164,7 @@ class BasicImage(np.ndarray):
         return miou.to_f64(affine)
 
     def to_npz(self, file: miot.PathLike | typing.BinaryIO) -> None:
-        np.savez_compressed(file, data=np.array(self), affine=self.affine)
+        np.savez_compressed(file, data=np.asarray(self), affine=self.affine)
 
     @classmethod
     def from_npz(
@@ -174,4 +174,4 @@ class BasicImage(np.ndarray):
         return cls(_data["data"], affine=_data["affine"])
 
     def torch_compatible(self) -> npt.NDArray:
-        return miou.ensure_4d(miou.check_uint_to_int(np.array(self)))
+        return miou.ensure_4d(miou.check_uint_to_int(np.asarray(self)))

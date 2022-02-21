@@ -174,13 +174,13 @@ def test_dicomdir_from_zipped_stream(zipped_dicom_path: pathlib.Path) -> None:
 
 
 def test_dicomimage_from_path(dicom_image_dir: pathlib.Path) -> None:
-    image = miod.DICOMImage.from_path(dicom_image_dir)
+    image: miod.DICOMImage = miod.DICOMImage.from_path(dicom_image_dir)
     assert image.shape == (TEST_IMAGE_SHAPE + (NUM_DUPLICATES,))
 
 
 def test_affine_in_image_vs_dicomimage(dicom_image_dir: pathlib.Path) -> None:
-    dcm_image = miod.DICOMImage.from_path(dicom_image_dir)
-    image = mioi.Image.from_path(dicom_image_dir)
+    dcm_image: miod.DICOMImage = miod.DICOMImage.from_path(dicom_image_dir)
+    image: mioi.Image = mioi.Image.from_path(dicom_image_dir)
     assert dcm_image.shape == image.shape
     assert np.allclose(
         dcm_image.affine, image.affine
@@ -189,8 +189,8 @@ def test_affine_in_image_vs_dicomimage(dicom_image_dir: pathlib.Path) -> None:
 
 def test_affine_vs_tio(dicom_image_dir: pathlib.Path) -> None:
     tio = pytest.importorskip("torchio")
-    dcm_image = miod.DICOMImage.from_path(dicom_image_dir)
-    image = mioi.Image.from_path(dicom_image_dir)
+    dcm_image: miod.DICOMImage = miod.DICOMImage.from_path(dicom_image_dir)
+    image: mioi.Image = mioi.Image.from_path(dicom_image_dir)
     tio_image = tio.ScalarImage(dicom_image_dir)
     assert np.allclose(image.affine, tio_image.affine)
     assert np.allclose(dcm_image.affine, tio_image.affine)
@@ -198,13 +198,13 @@ def test_affine_vs_tio(dicom_image_dir: pathlib.Path) -> None:
 
 def test_dicomimage_from_zipped_stream(zipped_dicom_path: pathlib.Path) -> None:
     with open(zipped_dicom_path, "rb") as f:
-        image = miod.DICOMImage.from_zipped_stream(f)
+        image: miod.DICOMImage = miod.DICOMImage.from_zipped_stream(f)
     assert image.shape == (TEST_IMAGE_SHAPE + (1,))
 
 
 def test_dicom_image_from_zipped_stream(zipped_dicom_path: pathlib.Path) -> None:
     with open(zipped_dicom_path, "rb") as f:
-        image = mioi.Image.from_dicom_zipped_stream(f)
+        image: mioi.Image = mioi.Image.from_dicom_zipped_stream(f)
     assert image.shape == (TEST_IMAGE_SHAPE + (1,))
 
 
@@ -212,24 +212,26 @@ def test_dicom_image_from_zipped_stream_encrypted(
     zipped_encrypted_dicom_path: pathlib.Path, encryption_key: builtins.bytes
 ) -> None:
     with open(zipped_encrypted_dicom_path, "rb") as f:
-        image = mioi.Image.from_dicom_zipped_stream(f, encryption_key=encryption_key)
+        image: mioi.Image = mioi.Image.from_dicom_zipped_stream(
+            f, encryption_key=encryption_key
+        )
     assert image.shape == (TEST_IMAGE_SHAPE + (1,))
 
 
 def test_nifti_image_from_path(nifti_image_path: pathlib.Path) -> None:
-    image = mioi.Image.from_path(nifti_image_path)
+    image: mioi.Image = mioi.Image.from_path(nifti_image_path)
     assert image.shape == NIFTI_IMAGE_SHAPE
 
 
 def test_nifti_image_from_stream(nifti_image_path: pathlib.Path) -> None:
     with open(nifti_image_path, "rb") as f:
-        image = mioi.Image.from_stream(f)
+        image: mioi.Image = mioi.Image.from_stream(f)
     assert image.shape == NIFTI_IMAGE_SHAPE
 
 
 def test_nifti_image_from_zipped_stream(zipped_nifti_path: pathlib.Path) -> None:
     with open(zipped_nifti_path, "rb") as f:
-        image = mioi.Image.from_zipped_stream(
+        image: mioi.Image = mioi.Image.from_zipped_stream(
             f, gzipped=False, image_class=nib.Nifti1Image
         )
     assert image.shape == NIFTI_IMAGE_SHAPE
@@ -239,7 +241,7 @@ def test_nifti_gzipped_image_from_zipped_stream(
     zipped_nifti_gzipped_path: pathlib.Path,
 ) -> None:
     with open(zipped_nifti_gzipped_path, "rb") as f:
-        image = mioi.Image.from_zipped_stream(
+        image: mioi.Image = mioi.Image.from_zipped_stream(
             f, gzipped=True, image_class=nib.Nifti1Image
         )
     assert image.shape == NIFTI_IMAGE_SHAPE
@@ -247,7 +249,7 @@ def test_nifti_gzipped_image_from_zipped_stream(
 
 # flake8: noqa: E501
 def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
-    image = miod.DICOMImage.from_path(dicom_image_dir)
+    image: miod.DICOMImage = miod.DICOMImage.from_path(dicom_image_dir)
     image_arr: np.ndarray = np.array(image)
     assert image.shape == (TEST_IMAGE_SHAPE + (NUM_DUPLICATES,))
     image = image + 0.0
@@ -259,7 +261,7 @@ def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     assert repr(image) == s
     mask = image == 0.0
     assert isinstance(mask, miod.DICOMImage)
-    subimage = image[:20, :20, :]
+    subimage: miod.DICOMImage = image[:20, :20, :]
     assert isinstance(subimage, miod.DICOMImage)
     image = image.astype(np.float64)
     assert np.allclose(image, (image_arr + 1.0) ** 2)

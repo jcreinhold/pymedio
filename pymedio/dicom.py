@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 ORIENTATION_ATOL = 1e-5
 
+DType = typing.TypeVar("DType", bound=np.generic)
 T = typing.TypeVar("T")
 
 
@@ -471,16 +472,16 @@ class DICOMDir:
         return result
 
 
-class DICOMImage(miob.BasicImage):
+class DICOMImage(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
     @classmethod
     def from_dicomdir(
         cls: typing.Type[DICOMImage],
         dicom_dir: DICOMDir,
         *,
         rescale: builtins.bool | None = None,
-        rescale_dtype: npt.DTypeLike = np.float32,
+        rescale_dtype: typing.Type[miot.DType] | None = None,
         order: typing.Literal["F", "C"] | None = None,
-    ) -> DICOMImage:
+    ) -> DICOMImage[miot.DType]:
         data = cls._merge_slice_pixel_arrays(
             dicom_dir.slices, rescale=rescale, rescale_dtype=rescale_dtype, order=order
         )
@@ -495,10 +496,10 @@ class DICOMImage(miob.BasicImage):
         fail_outside_max_nonuniformity: builtins.bool = True,
         remove_anomalous_images: builtins.bool = True,
         rescale: builtins.bool | None = None,
-        rescale_dtype: npt.DTypeLike = np.float32,
+        rescale_dtype: typing.Type[miot.DType] | None = None,
         order: typing.Literal["F", "C"] | None = None,
         extension: builtins.str = ".dcm",
-    ) -> DICOMImage:
+    ) -> DICOMImage[miot.DType]:
         dicomdir = DICOMDir.from_path(
             dicom_path,
             max_nonuniformity=max_nonuniformity,
@@ -520,10 +521,10 @@ class DICOMImage(miob.BasicImage):
         remove_anomalous_images: builtins.bool = True,
         encryption_key: builtins.bytes | builtins.str | None = None,
         rescale: builtins.bool | None = None,
-        rescale_dtype: npt.DTypeLike = np.float32,
+        rescale_dtype: typing.Type[miot.DType] | None = None,
         order: typing.Literal["F", "C"] | None = None,
         **zip_kwargs: typing.Any,
-    ) -> DICOMImage:
+    ) -> DICOMImage[miot.DType]:
         dicomdir = DICOMDir.from_zipped_stream(
             data_stream,
             max_nonuniformity=max_nonuniformity,
@@ -542,11 +543,13 @@ class DICOMImage(miob.BasicImage):
         slices: typing.Sequence[pydicom.Dataset],
         *,
         rescale: builtins.bool | None = None,
-        rescale_dtype: npt.DTypeLike = np.float32,
+        rescale_dtype: typing.Type[miot.DType] | None = None,
         order: typing.Literal["F", "C"] | None = None,
     ) -> npt.NDArray:
         if rescale is None:
             rescale = any(cls._requires_rescaling(d) for d in slices)
+        if rescale and rescale_dtype is None:
+            rescale_dtype = np.float32  # type: ignore[assignment]
 
         first_dataset = slices[0]
         slice_dtype = first_dataset.pixel_array.dtype
