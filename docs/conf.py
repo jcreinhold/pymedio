@@ -28,7 +28,6 @@ sys.path.insert(0, os.path.abspath(".."))
 autodoc_mock_imports = [
     "pydicom",
     "nibabel",
-    "numpy",
     "SimpleITK",
 ]
 
