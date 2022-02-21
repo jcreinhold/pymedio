@@ -7,7 +7,6 @@ from __future__ import annotations
 __all__ = ["BasicImage"]
 
 import builtins
-import numbers
 import typing
 import warnings
 
@@ -25,15 +24,16 @@ _Image = typing.TypeVar("_Image", bound="BasicImage")
 
 class BasicImage(np.ndarray):
 
-    _HANDLED_TYPES = (np.ndarray, numbers.Number)
     _affine: npt.NDArray
 
     def __new__(
         cls: typing.Type[_Image],
         data: npt.ArrayLike,
         affine: npt.NDArray | None = None,
+        copy: builtins.bool = True,
     ) -> _Image:
-        obj = cls._check_data(data).view(cls)
+        """CAUTION: if copy false, some np funcs unexpectedly mutate original array"""
+        obj = cls._check_data(data, copy=copy).view(cls)
         obj._affine = cls._check_affine(affine)
         obj._affine.flags.writeable = False
         return obj
@@ -45,15 +45,17 @@ class BasicImage(np.ndarray):
         self._affine.flags.writeable = False
 
     @property
-    def str_properties(self) -> typing.List[builtins.str]:
+    def repr_properties(self) -> typing.List[builtins.str]:
         return [
             f"shape: {self.shape}",
             f"spacing: {self.get_spacing_string()}",
             f"dtype: {self.dtype.name}",
         ]
 
-    def __str__(self) -> builtins.str:
-        properties = "; ".join(self.str_properties)
+    def __repr__(self) -> builtins.str:
+        if self.ndim == 0:
+            return str(self.item())
+        properties = "; ".join(self.repr_properties)
         string = f"{self.__class__.__name__}({properties})"
         return string
 
@@ -62,28 +64,47 @@ class BasicImage(np.ndarray):
         ufunc: np.ufunc,
         method: _UfuncMethod,
         *inputs: typing.Any,
+        out: typing.Any = None,
         **kwargs: typing.Any,
     ) -> typing.Any:
-        out = kwargs.get("out", ())
-        for x in inputs + out:
-            if not isinstance(x, self._HANDLED_TYPES + (self.__class__,)):
-                return NotImplemented
+
         affine = self.affine
-        is_cls = lambda y: isinstance(y, self.__class__)  # noqa: E731
-        ufunc_args = tuple(x.view(np.ndarray) if is_cls(x) else x for x in inputs)
-        if out:
-            kwargs["out"] = tuple(x.view(np.ndarray) if is_cls(x) else x for x in out)
-            if len(out) == 1 and is_cls(out[0]):
-                affine = out[0].affine
-        result = getattr(ufunc, method)(*ufunc_args, **kwargs)
-        if isinstance(result, tuple):
-            return tuple(self.__class__(x, affine) for x in result)
-        elif method == "at":
-            return None
-        elif isinstance(result, np.ndarray):
-            return typing.cast(_Image, self.__class__(result, affine))
+
+        ufunc_args = []
+        for input_ in inputs:
+            if isinstance(input_, BasicImage):
+                ufunc_args.append(input_.view(np.ndarray))
+            else:
+                ufunc_args.append(input_)
+
+        outputs = out
+        if outputs:
+            out_args = []
+            for output in outputs:
+                if isinstance(output, BasicImage):
+                    out_args.append(output.view(np.ndarray))
+                else:
+                    out_args.append(output)
+            kwargs["out"] = tuple(out_args)
         else:
-            return result
+            outputs = (None,) * ufunc.nout
+
+        results = super().__array_ufunc__(ufunc, method, *ufunc_args, **kwargs)
+
+        if method == "at":
+            if isinstance(inputs[0], BasicImage):
+                inputs[0].affine = affine
+            return
+
+        if ufunc.nout == 1:
+            results = (results,)
+
+        results = tuple(
+            (self.__class__(np.asarray(result), affine) if output is None else output)
+            for result, output in zip(results, outputs)
+        )
+
+        return results[0] if len(results) == 1 else results
 
     @property
     def affine(self) -> npt.NDArray:
@@ -121,8 +142,8 @@ class BasicImage(np.ndarray):
         return string
 
     @staticmethod
-    def _check_data(data: npt.ArrayLike) -> npt.NDArray:
-        data = np.asanyarray(data)
+    def _check_data(data: npt.ArrayLike, copy: builtins.bool) -> npt.NDArray:
+        data = np.array(data, copy=copy)
         if np.isnan(data).any():
             warnings.warn("NaNs found in data", RuntimeWarning)
         if any(d == 0 for d in data.shape):
