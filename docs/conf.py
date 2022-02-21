@@ -119,7 +119,7 @@ htmlhelp_basename = "pymediodoc"
 
 # -- Options for LaTeX output ------------------------------------------
 
-latex_elements: typing.Dict[builtins.str, typing.Any] = {
+latex_elements: builtins.dict[builtins.str, typing.Any] = {
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',
