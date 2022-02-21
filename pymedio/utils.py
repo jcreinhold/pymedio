@@ -27,7 +27,7 @@ import pymedio.typing as miot
 
 # Matrices used to switch between LPS and RAS
 def _create_flip_matrix(
-    elements: typing.Tuple[miot.Float, ...]
+    elements: builtins.tuple[miot.Float, ...]
 ) -> npt.NDArray[np.float64]:
     matrix: npt.NDArray = to_f64(np.diag(elements))
     return matrix
@@ -51,14 +51,14 @@ def is_iterable(x: typing.Any) -> builtins.bool:
 
 
 def unzip(
-    zipped_list: typing.Iterable[typing.Tuple[typing.Any, ...]]
-) -> typing.Iterable[typing.Tuple[typing.Any, ...]]:
+    zipped_list: typing.Iterable[builtins.tuple[typing.Any, ...]]
+) -> typing.Iterable[builtins.tuple[typing.Any, ...]]:
     return zip(*zipped_list)
 
 
 def get_rotation_and_spacing_from_affine(
     affine: npt.NDArray[miot.DType],
-) -> typing.Tuple[npt.NDArray[miot.DType], npt.NDArray[miot.DType]]:
+) -> builtins.tuple[npt.NDArray[miot.DType], npt.NDArray[miot.DType]]:
     # From https://github.com/nipy/nibabel/blob/master/nibabel/orientations.py
     rotation_zoom = affine[:3, :3]
     spacing = np.sqrt(np.sum(rotation_zoom * rotation_zoom, axis=0))
@@ -71,7 +71,7 @@ def get_metadata_from_ras_affine(
     *,
     is_2d: builtins.bool = False,
     lps: builtins.bool = True,
-) -> typing.Tuple[miot.TripletFloat, miot.TripletFloat, miot.Direction]:
+) -> builtins.tuple[miot.TripletFloat, miot.TripletFloat, miot.Direction]:
     direction_ras, spacing_array = get_rotation_and_spacing_from_affine(affine)
     origin_ras = affine[:3, 3]
     _flipxy_33 = flipxy_33()

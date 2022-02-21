@@ -11,6 +11,7 @@ __all__ = [
 ]
 
 import builtins
+import collections.abc
 import dataclasses
 import functools
 import io
@@ -44,7 +45,7 @@ DType = typing.TypeVar("DType", bound=np.generic)
 T = typing.TypeVar("T")
 
 
-def _all_float_like(seq: typing.Sequence[builtins.float]) -> builtins.bool:
+def _all_float_like(seq: collections.abc.Sequence[builtins.float]) -> builtins.bool:
     return all(isinstance(x, (float, int)) for x in seq)
 
 
@@ -121,9 +122,9 @@ class Cosines:
 
 @dataclasses.dataclass(frozen=True)
 class SortedSlices:
-    slices: typing.Tuple[pydicom.Dataset, ...]
-    indices: typing.Tuple[builtins.int, ...]  # mapping to get original slice order
-    positions: typing.Tuple[builtins.float, ...]
+    slices: builtins.tuple[pydicom.Dataset, ...]
+    indices: builtins.tuple[builtins.int, ...]  # mapping to get original slice order
+    positions: builtins.tuple[builtins.float, ...]
     cosines: Cosines
 
     def __repr__(self) -> builtins.str:
@@ -131,7 +132,7 @@ class SortedSlices:
 
     def __len__(self) -> builtins.int:
         _len = len(self.slices)
-        exn_msg: typing.List[builtins.str] = []
+        exn_msg: builtins.list[builtins.str] = []
         if _len != (ind_len := len(self.indices)):
             exn_msg.append(f"num slices {_len} != num indices {ind_len}")
         if _len != (pos_len := len(self.positions)):
@@ -153,7 +154,7 @@ class SortedSlices:
         imps = (miou.to_f64(sd.ImagePositionPatient) for sd in slice_datasets)
         positions = (np.dot(cs, imp).item() for imp in imps)
         _sorted = typing.cast(
-            typing.Iterable[typing.Tuple[builtins.int, builtins.float]],
+            typing.Iterable[builtins.tuple[builtins.int, builtins.float]],
             sorted(enumerate(positions), key=operator.itemgetter(1)),
         )
         sorted_indices, sorted_positions = miou.unzip(_sorted)
@@ -249,7 +250,7 @@ class SortedSlices:
         values: typing.Sequence[T],
         *,
         atol: builtins.float = ORIENTATION_ATOL,
-    ) -> typing.Tuple[T, ...]:
+    ) -> builtins.tuple[T, ...]:
         # TODO: improve computational efficiency
         # TODO: fix bad init -> bad result
         if not values:
@@ -280,17 +281,17 @@ class SortedSlices:
 
     def _zip(
         self, *args: typing.Iterable[typing.Any]
-    ) -> typing.Iterable[typing.Tuple[typing.Any, ...]]:
+    ) -> typing.Iterable[builtins.tuple[typing.Any, ...]]:
         return zip(self.slices, self.indices, self.positions, *args)
 
 
 @dataclasses.dataclass(frozen=True)
 class DICOMDir:
-    slices: typing.Tuple[pydicom.Dataset, ...]
-    positions: typing.Tuple[builtins.float, ...]
+    slices: builtins.tuple[pydicom.Dataset, ...]
+    positions: builtins.tuple[builtins.float, ...]
     slice_spacing: builtins.float
     affine: npt.NDArray
-    paths: typing.Tuple[miot.PathLike, ...] | None = None
+    paths: builtins.tuple[miot.PathLike, ...] | None = None
 
     def __len__(self) -> builtins.int:
         _len = len(self.slices)
@@ -342,7 +343,7 @@ class DICOMDir:
         defer_size: builtins.str | builtins.int | None = "1 KB",
         extension: builtins.str = ".dcm",
     ) -> DICOMDir:
-        paths: typing.Tuple[miot.PathLike, ...]
+        paths: builtins.tuple[miot.PathLike, ...]
         if (
             isinstance(dicom_path, (builtins.str, pathlib.Path))
             and (_dcm_dir := pathlib.Path(dicom_path)).is_dir()
@@ -358,7 +359,7 @@ class DICOMDir:
             raise ValueError("dicom_dir must be path to a dir. or a list of dcm paths")
         images = tuple(pydicom.dcmread(path, defer_size=defer_size) for path in paths)
         return cls.from_datasets(
-            typing.cast(typing.List[pydicom.Dataset], images),
+            typing.cast(builtins.list[pydicom.Dataset], images),
             paths=paths,
             max_nonuniformity=max_nonuniformity,
             fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
@@ -368,7 +369,7 @@ class DICOMDir:
     @classmethod
     def from_zipped_stream(
         cls: typing.Type[DICOMDir],
-        data_stream: typing.BinaryIO,
+        data_stream: typing.IO,
         *,
         max_nonuniformity: builtins.float = 5e-4,
         fail_outside_max_nonuniformity: builtins.bool = True,
@@ -397,8 +398,8 @@ class DICOMDir:
     @staticmethod
     def dicom_datasets_from_zip(
         zip_file: zipfile.ZipFile,
-    ) -> typing.List[pydicom.Dataset]:
-        datasets: typing.List[pydicom.Dataset] = []
+    ) -> builtins.list[pydicom.Dataset]:
+        datasets: builtins.list[pydicom.Dataset] = []
         for name in zip_file.namelist():
             if name.endswith("/"):
                 continue  # skip directories
@@ -514,7 +515,7 @@ class DICOMImage(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-
     @classmethod
     def from_zipped_stream(
         cls: typing.Type[DICOMImage],
-        data_stream: typing.BinaryIO,
+        data_stream: typing.IO,
         *,
         max_nonuniformity: builtins.float = 5e-4,
         fail_outside_max_nonuniformity: builtins.bool = True,

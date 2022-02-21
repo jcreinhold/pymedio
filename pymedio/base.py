@@ -45,7 +45,7 @@ class BasicImage(npt.NDArray[miot.DType]):
         self._affine.flags.writeable = False
 
     @property
-    def repr_properties(self) -> typing.List[builtins.str]:
+    def repr_properties(self) -> builtins.list[builtins.str]:
         return [
             f"shape: {self.shape}",
             f"spacing: {self.get_spacing_string()}",
@@ -120,13 +120,13 @@ class BasicImage(npt.NDArray[miot.DType]):
         return direction
 
     @property
-    def spacing(self) -> typing.Tuple[miot.Float, ...]:
+    def spacing(self) -> builtins.tuple[miot.Float, ...]:
         """Voxel spacing in mm."""
         _, spacing = miou.get_rotation_and_spacing_from_affine(self.affine)
         return tuple(spacing)
 
     @property
-    def origin(self) -> typing.Tuple[miot.Float, ...]:
+    def origin(self) -> builtins.tuple[miot.Float, ...]:
         """Center of first voxel in array, in mm."""
         return tuple(self.affine[:3, 3])
 

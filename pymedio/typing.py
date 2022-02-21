@@ -16,6 +16,7 @@ __all__ = [
 ]
 
 import builtins
+import collections.abc
 import os
 import typing
 
@@ -29,16 +30,18 @@ Float = typing.Union[np.floating[T], builtins.float]
 Int = typing.Union[np.integer[T], builtins.int]
 
 # https://www.python.org/dev/peps/pep-0519/#provide-specific-type-hinting-support
-Bound = typing.Tuple[Float[T], Float[T]]
-Bounds = typing.Tuple[Bound[T], Bound[T], Bound[T]]
-DataAffine = typing.Tuple[npt.NDArray[DType], npt.NDArray[np.float64]]
-Direction2D = typing.Tuple[Float[T], Float[T], Float[T], Float[T]]
-Direction3D = typing.Tuple[Float[T], Float[T], Float[T], Float[T], Float[T], Float[T]]
+Bound = builtins.tuple[Float[T], Float[T]]
+Bounds = builtins.tuple[Bound[T], Bound[T], Bound[T]]
+DataAffine = builtins.tuple[npt.NDArray[DType], npt.NDArray[np.float64]]
+Direction2D = builtins.tuple[Float[T], Float[T], Float[T], Float[T]]
+Direction3D = builtins.tuple[Float[T], Float[T], Float[T], Float[T], Float[T], Float[T]]
 Direction = typing.Union[Direction2D[T], Direction3D[T]]
 PathLike = typing.Union[builtins.str, os.PathLike]
-Shape = typing.Tuple[Int[T], ...]
-ShapeLike = typing.Union[typing.SupportsIndex, typing.Sequence[typing.SupportsIndex]]
-TripletFloat = typing.Tuple[Float[T], Float[T], Float[T]]
+Shape = builtins.tuple[Int[T], ...]
+ShapeLike = typing.Union[
+    typing.SupportsIndex, collections.abc.Sequence[typing.SupportsIndex]
+]
+TripletFloat = builtins.tuple[Float[T], Float[T], Float[T]]
 
 
 class SupportsArray(typing.Protocol):
