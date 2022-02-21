@@ -31,8 +31,8 @@ import pymedio.typing as miot
 
 class Image(miob.BasicImage):
     @property
-    def str_properties(self) -> typing.List[builtins.str]:
-        props = super().str_properties
+    def repr_properties(self) -> typing.List[builtins.str]:
+        props = super().repr_properties
         props += [f"orientation: {''.join(self.orientation)}+"]
         return props
 
