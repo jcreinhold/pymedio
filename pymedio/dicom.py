@@ -255,7 +255,7 @@ class SortedSlices:
         # TODO: fix bad init -> bad result
         if not values:
             return tuple()
-        approx_unique: typing.Dict[T, builtins.int] = dict()
+        approx_unique: builtins.dict[T, builtins.int] = dict()
         for val in values:
             min_dist = np.inf
             min_dist_val = None
