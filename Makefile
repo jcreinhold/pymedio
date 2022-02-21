@@ -121,7 +121,7 @@ snyk:  ## run snyk on to check requirements
 	snyk test --file=requirements_dev.txt --package-manager=pip --fail-on=all
 
 test: ## run tests quickly with the default Python
-	pytest
+	pytest --cov=pymedio --disable-pytest-warnings --doctest-modules
 
 test-all: ## run tests on every Python version with tox
 	tox
