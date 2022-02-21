@@ -2,7 +2,7 @@
 History
 =======
 
-0.2.6 (2022-02-20)
+0.2.6 (2022-02-21)
 ------------------
 
 * Fix mutation issue; appeared to be because took a view of SimpleITK image instead of a copy
