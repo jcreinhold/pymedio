@@ -2,6 +2,14 @@
 History
 =======
 
+0.2.6 (2022-02-20)
+------------------
+
+* Fix mutation issue; appeared to be because took a view of SimpleITK image instead of a copy
+* Only support Python 3.9 (and greater when SimpleITK does so). It takes too long to support
+  old versions of Python, and the primary use case would be to support legacy systems,
+  e.g., for industry.
+
 0.2.5 (2022-02-20)
 ------------------
 
