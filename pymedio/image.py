@@ -29,7 +29,7 @@ import pymedio.functional as miof
 import pymedio.typing as miot
 
 
-class Image(miob.BasicImage):
+class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
     @property
     def repr_properties(self) -> typing.List[builtins.str]:
         props = super().repr_properties
@@ -44,7 +44,7 @@ class Image(miob.BasicImage):
         return codes
 
     @property
-    def bounds(self) -> npt.NDArray:
+    def bounds(self) -> npt.NDArray[np.float64]:
         """Position of centers of voxels in smallest and largest indices."""
         ini = 0, 0, 0
         fin: np.ndarray = np.asarray(self.shape) - 1
@@ -113,10 +113,10 @@ class Image(miob.BasicImage):
         cls: typing.Type[Image],
         path: miot.PathLike,
         *,
-        dtype: npt.DTypeLike = np.float32,
-        mmap: builtins.bool = False,
-    ) -> Image:
-        data, affine = miof.read_image(path, dtype=dtype, mmap=mmap)
+        dtype: typing.Type[miot.DType] | None = None,
+        eager: builtins.bool = True,
+    ) -> Image[miot.DType]:
+        data, affine = miof.read_image(path, dtype=dtype, eager=eager)
         return cls(data=data, affine=affine)
 
     @classmethod
@@ -124,10 +124,10 @@ class Image(miob.BasicImage):
         cls: typing.Type[Image],
         data_stream: typing.BinaryIO,
         *,
-        dtype: npt.DTypeLike = np.float32,
+        dtype: typing.Type[miot.DType] | None = None,
         gzipped: builtins.bool = False,
         image_class: miof.NibabelImageClass | None = None,
-    ) -> Image:
+    ) -> Image[miot.DType]:
         data, affine = miof.read_image_from_stream(
             data_stream, dtype=dtype, gzipped=gzipped, image_class=image_class
         )
@@ -138,11 +138,11 @@ class Image(miob.BasicImage):
         cls: typing.Type[Image],
         data_stream: typing.BinaryIO,
         *,
-        dtype: npt.DTypeLike = np.float32,
+        dtype: typing.Type[miot.DType] | None = None,
         gzipped: builtins.bool = False,
         image_class: miof.NibabelImageClass | None = None,
         **zip_kwargs: typing.Any,
-    ) -> Image:
+    ) -> Image[miot.DType]:
         with zipfile.ZipFile(data_stream, "r", **zip_kwargs) as zf:
             names = [name for name in zf.namelist() if not name.endswith("/")]
             if (n := len(names)) != 1:
@@ -158,8 +158,13 @@ class Image(miob.BasicImage):
                 )
 
     @classmethod
-    def from_sitk(cls: typing.Type[Image], sitk_image: sitk.Image) -> Image:
-        data, affine = miof.sitk_to_array(sitk_image)
+    def from_sitk(
+        cls: typing.Type[Image],
+        sitk_image: sitk.Image,
+        *,
+        dtype: typing.Type[miot.DType] | None = None,
+    ) -> Image:
+        data, affine = miof.sitk_to_array(sitk_image, dtype=dtype)
         return cls(data=data, affine=affine)
 
     @classmethod
@@ -178,8 +183,8 @@ class Image(miob.BasicImage):
         remove_anomalous_images: builtins.bool = True,
         encryption_key: builtins.bytes | builtins.str | None = None,
         rescale: builtins.bool | None = None,
-        rescale_dtype: npt.DTypeLike = np.float32,
-    ) -> Image:
+        rescale_dtype: typing.Type[miot.DType] | None = None,
+    ) -> Image[miot.DType]:
         dicom_image = miod.DICOMImage.from_zipped_stream(
             data_stream,
             max_nonuniformity=max_nonuniformity,

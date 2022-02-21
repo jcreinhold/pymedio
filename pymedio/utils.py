@@ -26,16 +26,18 @@ import pymedio.typing as miot
 
 
 # Matrices used to switch between LPS and RAS
-def _create_flip_matrix(elements: typing.Tuple[builtins.float, ...]) -> npt.NDArray:
+def _create_flip_matrix(
+    elements: typing.Tuple[miot.Float, ...]
+) -> npt.NDArray[np.float64]:
     matrix: npt.NDArray = to_f64(np.diag(elements))
     return matrix
 
 
-def flipxy_33() -> npt.NDArray:
+def flipxy_33() -> npt.NDArray[np.float64]:
     return _create_flip_matrix((-1.0, -1.0, 1.0))
 
 
-def flipxy_44() -> npt.NDArray:
+def flipxy_44() -> npt.NDArray[np.float64]:
     return _create_flip_matrix((-1.0, -1.0, 1.0, 1.0))
 
 
@@ -55,8 +57,8 @@ def unzip(
 
 
 def get_rotation_and_spacing_from_affine(
-    affine: npt.NDArray,
-) -> typing.Tuple[npt.NDArray, npt.NDArray]:
+    affine: npt.NDArray[miot.DType],
+) -> typing.Tuple[npt.NDArray[miot.DType], npt.NDArray[miot.DType]]:
     # From https://github.com/nipy/nibabel/blob/master/nibabel/orientations.py
     rotation_zoom = affine[:3, :3]
     spacing = np.sqrt(np.sum(rotation_zoom * rotation_zoom, axis=0))
@@ -91,15 +93,15 @@ def get_metadata_from_ras_affine(
         direction = d1, d2, d3, d4
     else:
         d1, d2, d3, d4, d5, d6, d7, d8, d9 = direction_array
-        direction = d1, d2, d3, d4, d5, d6, d7, d8, d9
+        direction = d1, d2, d3, d4, d5, d6, d7, d8, d9  # type: ignore[assignment]
     origin = ox, oy, oz
     spacing = sx, sy, sz
     return origin, spacing, direction
 
 
 def ensure_4d(
-    array: npt.NDArray, *, num_spatial_dims: builtins.int | None = None
-) -> npt.NDArray:
+    array: npt.NDArray[miot.DType], *, num_spatial_dims: builtins.int | None = None
+) -> npt.NDArray[miot.DType]:
     """for PyTorch"""
     num_dimensions = array.ndim
     if num_dimensions == 4:
