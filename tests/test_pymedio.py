@@ -256,7 +256,7 @@ def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     assert isinstance(image, miod.DICOMImage)
     assert np.all(image == (image_arr + 1.0) ** 2)
     s = f"DICOMImage(shape: ({TEST_IMAGE_SHAPE[0]}, {TEST_IMAGE_SHAPE[1]}, {NUM_DUPLICATES}); spacing: (0.66, 0.66, {DIST}); dtype: float32)"
-    assert str(image) == s
+    assert repr(image) == s
     mask = image == 0.0
     assert isinstance(mask, miod.DICOMImage)
     subimage = image[:20, :20, :]
@@ -265,7 +265,7 @@ def test_numpy_ufuncs_on_dicom_image(dicom_image_dir: pathlib.Path) -> None:
     assert np.allclose(image, (image_arr + 1.0) ** 2)
     assert isinstance(image, miod.DICOMImage)
     s = f"DICOMImage(shape: ({TEST_IMAGE_SHAPE[0]}, {TEST_IMAGE_SHAPE[1]}, {NUM_DUPLICATES}); spacing: (0.66, 0.66, {DIST}); dtype: float64)"
-    assert str(image) == s
+    assert repr(image) == s
 
 
 # flake8: noqa: E501
@@ -281,11 +281,11 @@ def test_numpy_ufuncs_on_image(image: mioi.Image) -> None:
     assert isinstance(image, mioi.Image)
     image[0:2] += 1.0
     s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1, 1, 1); dtype: float32; orientation: RAS+)"
-    assert str(image) == s
+    assert repr(image) == s
     _image: mioi.Image = np.squeeze(image).astype(np.float16)  # type: ignore[assignment]
     assert np.all(_image >= 4.0)
     s = f"Image(shape: {NIFTI_IMAGE_SHAPE}; spacing: (1, 1, 1); dtype: float16; orientation: RAS+)"
-    assert str(_image) == s
+    assert repr(_image) == s
     image = image.ravel()
     assert np.all(image >= 4.0)
     assert isinstance(image, mioi.Image)
