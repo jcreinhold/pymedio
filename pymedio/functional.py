@@ -84,7 +84,7 @@ def read_image(
 
 
 def read_image_from_stream(
-    stream: typing.BinaryIO,
+    stream: typing.IO,
     *,
     dtype: typing.Type[miot.DType] | None = None,
     gzipped: builtins.bool = False,

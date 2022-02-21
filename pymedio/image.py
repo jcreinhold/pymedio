@@ -31,15 +31,15 @@ import pymedio.typing as miot
 
 class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
     @property
-    def repr_properties(self) -> typing.List[builtins.str]:
+    def repr_properties(self) -> builtins.list[builtins.str]:
         props = super().repr_properties
         props += [f"orientation: {''.join(self.orientation)}+"]
         return props
 
     @property
-    def orientation(self) -> typing.Tuple[builtins.str, builtins.str, builtins.str]:
+    def orientation(self) -> builtins.tuple[builtins.str, builtins.str, builtins.str]:
         """Orientation codes."""
-        codes: typing.Tuple[builtins.str, builtins.str, builtins.str]
+        codes: builtins.tuple[builtins.str, builtins.str, builtins.str]
         codes = nib.aff2axcodes(self.affine)
         return codes
 
@@ -122,7 +122,7 @@ class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
     @classmethod
     def from_stream(
         cls: typing.Type[Image],
-        data_stream: typing.BinaryIO,
+        data_stream: typing.IO,
         *,
         dtype: typing.Type[miot.DType] | None = None,
         gzipped: builtins.bool = False,
@@ -136,7 +136,7 @@ class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
     @classmethod
     def from_zipped_stream(
         cls: typing.Type[Image],
-        data_stream: typing.BinaryIO,
+        data_stream: typing.IO,
         *,
         dtype: typing.Type[miot.DType] | None = None,
         gzipped: builtins.bool = False,
@@ -176,7 +176,7 @@ class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
     @classmethod
     def from_dicom_zipped_stream(
         cls: typing.Type[Image],
-        data_stream: typing.BinaryIO,
+        data_stream: typing.IO,
         *,
         max_nonuniformity: builtins.float = 5e-4,
         fail_outside_max_nonuniformity: builtins.bool = True,
