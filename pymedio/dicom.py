@@ -352,7 +352,7 @@ class DICOMDir:
         elif (
             not isinstance(dicom_path, (builtins.str, pathlib.Path))
             and miou.is_iterable(dicom_path)
-            and all(str(p).endswith(f".{extension}") for p in dicom_path)  # type: ignore[union-attr]  # noqa: E501
+            and all(str(p).endswith(extension) for p in dicom_path)  # type: ignore[union-attr]  # noqa: E501
         ):
             paths = tuple(dicom_path)  # type: ignore[arg-type]
         else:
