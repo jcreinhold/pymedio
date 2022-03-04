@@ -2,6 +2,17 @@
 History
 =======
 
+0.2.8 (2022-03-04)
+------------------
+
+* Bump minimum required numpy version to v1.22 since it's required for type annotations.
+
+0.2.7 (2022-02-24)
+------------------
+
+* Fix bug in ``DICOMDir.from_path`` where extension not properly formatted with list of paths.
+* Fix readthedocs build.
+
 0.2.6 (2022-02-21)
 ------------------
 
