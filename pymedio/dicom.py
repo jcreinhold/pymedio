@@ -150,9 +150,8 @@ class SortedSlices:
             raise ValueError("slice_datasets empty")
         image_orientation = miou.to_f64(slice_datasets[0].ImageOrientationPatient)
         cosines = Cosines.from_orientation(image_orientation)
-        cs = cosines.slice
-        imps = (miou.to_f64(sd.ImagePositionPatient) for sd in slice_datasets)
-        positions = (np.dot(cs, imp).item() for imp in imps)
+        ipps = (miou.to_f64(sd.ImagePositionPatient) for sd in slice_datasets)
+        positions = (np.dot(cosines.slice, imp).item() for imp in ipps)
         _sorted = typing.cast(
             typing.Iterable[builtins.tuple[builtins.int, builtins.float]],
             sorted(enumerate(positions), key=operator.itemgetter(1)),
@@ -186,22 +185,31 @@ class SortedSlices:
                 raise mioe.MissingSlicesException(msg)
 
     def remove_anomalous_slices(
-        self, *, strict_unique: builtins.bool = True
+        self,
+        *,
+        strict_unique_orientation: builtins.bool = True,
+        unique_positions: builtins.bool = True,
     ) -> SortedSlices:
         to_float_tuple = lambda xs: tuple(float(x) for x in xs)  # noqa: E731
         orientations = [to_float_tuple(s.ImageOrientationPatient) for s in self.slices]
-        if strict_unique:
+        if strict_unique_orientation:
             unq_oris: np.ndarray
             unq_oris, counts = np.unique(orientations, axis=0, return_counts=True)
             most_common_orientation = unq_oris[np.argmax(counts)]
         else:
             approx_unique_orientations = self._approx_unique(orientations)
             most_common_orientation = approx_unique_orientations[-1]
-        out = [
-            (s, idx, pos)
-            for s, idx, pos, o in self._zip(orientations)
-            if np.allclose(o, most_common_orientation, atol=ORIENTATION_ATOL)
-        ]
+        seen_positions = set()
+        out = []
+        for _slice, idx, pos, o in self._zip_with(orientations):
+            if np.allclose(o, most_common_orientation, atol=ORIENTATION_ATOL):
+                if unique_positions and pos in seen_positions:
+                    logger.debug(f"Slice at index {idx} has a non-unique position.")
+                    continue
+                out.append((_slice, idx, pos))
+                seen_positions.add(pos)
+            else:
+                logger.debug(f"Slice at index {idx} has a different orientation.")
         new_slices, new_indices, new_positions = miou.unzip(out)
         if (n_removed := (len(self) - len(new_slices))) > 1:
             warnings.warn(f"{n_removed} anomalous images removed.")
@@ -279,7 +287,7 @@ class SortedSlices:
         )
         return approx_unq_arrs
 
-    def _zip(
+    def _zip_with(
         self, *args: typing.Iterable[typing.Any]
     ) -> typing.Iterable[builtins.tuple[typing.Any, ...]]:
         return zip(self.slices, self.indices, self.positions, *args)

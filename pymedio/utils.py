@@ -61,7 +61,7 @@ def get_rotation_and_spacing_from_affine(
 ) -> builtins.tuple[npt.NDArray[miot.DType], npt.NDArray[miot.DType]]:
     # From https://github.com/nipy/nibabel/blob/master/nibabel/orientations.py
     rotation_zoom = affine[:3, :3]
-    spacing = np.sqrt(np.sum(rotation_zoom * rotation_zoom, axis=0))
+    spacing = np.linalg.norm(rotation_zoom, axis=0)
     rotation = rotation_zoom / spacing
     return rotation, spacing
 
