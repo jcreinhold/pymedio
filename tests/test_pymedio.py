@@ -305,6 +305,28 @@ def test_convert_to_torch(image: mioi.Image) -> None:
     torch.as_tensor(image.torch_compatible())
 
 
+def test_resize(image: mioi.Image, dicom_image: pydicom.Dataset) -> None:
+    new_shape = np.array(image.shape) * 2
+    resized = image.resample_image(new_shape)  # type: ignore[arg-type]
+    assert resized.shape == tuple(new_shape)
+    orig_spacing: np.ndarray = np.array(image.spacing)
+    new_spacing: np.ndarray = np.array(resized.spacing)
+    assert np.allclose(orig_spacing, new_spacing * 2)
+    assert resized.dtype == image.dtype
+
+    datasets = [dicom_image]
+    dcmdir = miod.DICOMDir.from_datasets(datasets)
+    dcmimg: miod.DICOMImage = miod.DICOMImage.from_dicomdir(dcmdir)
+    image = mioi.Image.from_dicom_image(dcmimg)
+    new_shape = np.array(image.shape) * 2
+    resized = image.resample_image(new_shape)  # type: ignore[arg-type]
+    assert resized.shape == tuple(new_shape)
+    orig_spacing = np.array(image.spacing)
+    new_spacing = np.array(resized.spacing)
+    assert np.allclose(orig_spacing, new_spacing * 2)
+    assert resized.dtype == image.dtype
+
+
 def test_save_image(
     tmp_path_factory: pytest.TempPathFactory, image: mioi.Image
 ) -> None:

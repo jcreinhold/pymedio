@@ -7,6 +7,7 @@ from __future__ import annotations
 __all__ = ["BasicImage"]
 
 import builtins
+import collections.abc
 import typing
 import warnings
 
@@ -204,3 +205,35 @@ class BasicImage(npt.NDArray[miot.DType]):
 
     def torch_compatible(self) -> npt.NDArray:
         return miou.ensure_4d(miou.check_uint_to_int(np.asarray(self)))
+
+    def resample_image(self, shape: collections.abc.Sequence[builtins.int]) -> _Image:
+        if self.ndim != len(shape):
+            raise ValueError("length of 'shape' != number of dimensions in image.")
+        if any(s <= 0 for s in shape):
+            raise ValueError("All elements of 'shape' must be positive.")
+        data = np.asarray(self)
+        resolution_scale = np.empty(len(shape), dtype=np.float64)
+        for i, (new_s, s) in enumerate(zip(shape, self.shape)):
+            resolution_scale[i] = s / new_s
+
+            def interpolate(fp: np.ndarray) -> np.ndarray:
+                return np.interp(
+                    np.linspace(0, s, dtype=self.dtype, endpoint=False, num=new_s),
+                    np.arange(0, s, dtype=self.dtype),
+                    fp,
+                )
+
+            data = np.apply_along_axis(interpolate, i, data)
+        # https://math.stackexchange.com/q/1120209
+        # TODO: verify this is correct
+        rzs = self.affine[:3, :3]  # rotation, scale (zoom), shear
+        rotation, zs = np.linalg.qr(rzs)
+        scale = np.diag(zs.diagonal())
+        shear = np.linalg.inv(scale) @ zs
+        new_affine = np.zeros_like(self.affine)
+        new_scale = scale @ np.diag(resolution_scale)
+        new_affine[:3, :3] = (rotation * new_scale) @ shear
+        new_affine[:3, 3] = self.affine[:3, 3]
+        return self.__class__(
+            data.astype(self.dtype, copy=False), new_affine, info=self.info
+        )
