@@ -31,11 +31,14 @@ class BasicImage(npt.NDArray[miot.DType]):
         data: npt.ArrayLike,
         affine: npt.NDArray | None = None,
         *,
+        info: builtins.str | npt.NDArray[np.str_] | None = None,
         copy: builtins.bool = False,
     ) -> _Image:
         obj = cls._check_data(data, copy=copy).view(cls)
         obj._affine = cls._check_affine(affine)
         obj._affine.flags.writeable = False
+        obj._info = cls._check_info(info)
+        obj._info.flags.writeable = False
         return obj
 
     def __array_finalize__(self, obj: builtins.object) -> None:
@@ -43,6 +46,8 @@ class BasicImage(npt.NDArray[miot.DType]):
             return
         self._affine = self._check_affine(getattr(obj, "_affine", None))
         self._affine.flags.writeable = False
+        self._info = self._check_info(getattr(obj, "info", None))
+        self._info.flags.writeable = False
 
     @property
     def repr_properties(self) -> builtins.list[builtins.str]:
@@ -69,6 +74,7 @@ class BasicImage(npt.NDArray[miot.DType]):
     ) -> typing.Any:
 
         affine = self.affine
+        info = self.info
 
         ufunc_args = []
         for input_ in inputs:
@@ -94,13 +100,18 @@ class BasicImage(npt.NDArray[miot.DType]):
         if method == "at":
             if isinstance(inputs[0], BasicImage):
                 inputs[0].affine = affine
+                inputs[0].info = info
             return
 
         if ufunc.nout == 1:
             results = (results,)
 
         results = tuple(
-            (self.__class__(np.asarray(result), affine) if output is None else output)
+            (
+                self.__class__(np.asarray(result), affine, info=info)
+                if output is None
+                else output
+            )
             for result, output in zip(results, outputs)
         )
 
@@ -113,6 +124,14 @@ class BasicImage(npt.NDArray[miot.DType]):
     @affine.setter
     def affine(self, new_affine: npt.NDArray) -> None:
         self._affine = self._check_affine(new_affine)
+
+    @property
+    def info(self) -> npt.NDArray[np.str_]:
+        return self._affine
+
+    @info.setter
+    def info(self, new_info: builtins.str | npt.NDArray[np.str_] | None) -> None:
+        self._info = self._check_info(new_info)
 
     @property
     def direction(self) -> miot.Direction:
@@ -132,7 +151,7 @@ class BasicImage(npt.NDArray[miot.DType]):
 
     @property
     def memory(self) -> miot.Int:
-        """Number of Bytes that the tensor takes in the RAM."""
+        """Number of bytes that the image array occupies in RAM"""
         mem: builtins.int = np.prod(self.shape) * self.itemsize
         return mem
 
@@ -163,15 +182,25 @@ class BasicImage(npt.NDArray[miot.DType]):
             raise ValueError(f"Affine shape must be (4, 4), not {bad_shape}")
         return miou.to_f64(affine)
 
+    @staticmethod
+    def _check_info(
+        info: builtins.str | npt.NDArray[np.str_] | None,
+    ) -> npt.NDArray[np.str_]:
+        if info is None:
+            info = ""
+        return np.asarray(info, dtype=np.str_)
+
     def to_npz(self, file: miot.PathLike | typing.BinaryIO) -> None:
-        np.savez_compressed(file, data=np.asarray(self), affine=self.affine)
+        np.savez_compressed(
+            file, data=np.asarray(self), affine=self.affine, info=self.info
+        )
 
     @classmethod
     def from_npz(
         cls, file: miot.PathLike | typing.BinaryIO, **np_load_kwargs
     ) -> _Image:
         _data = np.load(file, **np_load_kwargs)
-        return cls(_data["data"], affine=_data["affine"])
+        return cls(_data["data"], affine=_data["affine"], info=_data["info"])
 
     def torch_compatible(self) -> npt.NDArray:
         return miou.ensure_4d(miou.check_uint_to_int(np.asarray(self)))

@@ -16,7 +16,7 @@ T = typing.TypeVar("T", bound=np.ndarray)
 class BasicImage(npt.NDArray[miot.DType]):
     _HANDLED_TYPES: typing.ClassVar[builtins.tuple[typing.Type, ...]]
     _affine: npt.NDArray
-    def __new__(cls, data: npt.ArrayLike, affine: npt.NDArray | None = ...) -> T: ...  # type: ignore[misc]
+    def __new__(cls, data: npt.ArrayLike, affine: npt.NDArray | None = ..., info: typing.Any = ...) -> T: ...  # type: ignore[misc]
     def __array_finalize__(self, obj: builtins.object) -> None: ...
     def __array_ufunc__(
         self,
@@ -31,6 +31,10 @@ class BasicImage(npt.NDArray[miot.DType]):
     def affine(self) -> npt.NDArray: ...
     @affine.setter
     def affine(self, new_affine: npt.NDArray) -> None: ...
+    @property
+    def info(self) -> npt.NDArray[np.str_]: ...
+    @affine.setter
+    def info(self, new_info: builtins.str | npt.NDArray[np.str_] | None) -> None: ...
     @property
     def direction(self) -> miot.Direction: ...
     @property
