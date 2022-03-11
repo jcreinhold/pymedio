@@ -2,6 +2,13 @@
 History
 =======
 
+0.2.9 (2022-03-11)
+------------------
+
+* Add rudimentary ``resample_image`` to ``BasicImage``.
+* Add optional ``info`` string to ``BasicImage``.
+* Remove duplicate position images in ``remove_anomalous_image`` method (by default).
+
 0.2.8 (2022-03-04)
 ------------------
 
