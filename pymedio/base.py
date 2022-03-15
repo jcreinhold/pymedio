@@ -128,7 +128,7 @@ class BasicImage(npt.NDArray[miot.DType]):
 
     @property
     def info(self) -> npt.NDArray[np.str_]:
-        return self._affine
+        return self._info
 
     @info.setter
     def info(self, new_info: builtins.str | npt.NDArray[np.str_] | None) -> None:
