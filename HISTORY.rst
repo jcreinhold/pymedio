@@ -2,6 +2,11 @@
 History
 =======
 
+0.2.10 (2022-03-15)
+------------------
+
+* Fix bug in ``info`` getter in ``BasicImage`` which retrieved ``affine`` instead of ``info``.
+
 0.2.9 (2022-03-11)
 ------------------
 
