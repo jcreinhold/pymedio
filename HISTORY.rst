@@ -2,6 +2,11 @@
 History
 =======
 
+0.2.11 (2022-03-25)
+------------------
+
+* Move non-uniformity check after removing anomalous slices in ``DICOMDir``.
+
 0.2.10 (2022-03-15)
 ------------------
 
