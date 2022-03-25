@@ -321,12 +321,12 @@ class DICOMDir:
             msg = "Must provide at least one image DICOM dataset"
             raise mioe.DicomImportException(msg)
         sorted_slices = SortedSlices.from_datasets(datasets)
+        if remove_anomalous_images:
+            sorted_slices = sorted_slices.remove_anomalous_slices()
         sorted_slices.check_nonuniformity(
             max_nonuniformity=max_nonuniformity,
             fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
         )
-        if remove_anomalous_images:
-            sorted_slices = sorted_slices.remove_anomalous_slices()
         positions = tuple(sorted(sorted_slices.positions))
         idxs = sorted_slices.indices
         dicom_dir = cls(
