@@ -8,6 +8,7 @@ from __future__ import annotations
 __all__ = [
     "DICOMDir",
     "DICOMImage",
+    "gather_dicom",
 ]
 
 import builtins
@@ -43,10 +44,36 @@ ORIENTATION_ATOL = 1e-5
 
 DType = typing.TypeVar("DType", bound=np.generic)
 T = typing.TypeVar("T")
+Datasets = typing.Iterable[pydicom.Dataset]
 
 
 def _all_float_like(seq: collections.abc.Sequence[builtins.float]) -> builtins.bool:
     return all(isinstance(x, (float, int)) for x in seq)
+
+
+def gather_dicom(
+    dicom_path: miot.PathLike | typing.Iterable[miot.PathLike],
+    *,
+    defer_size: builtins.str | builtins.int | None = "1 KB",
+    extension: builtins.str = ".dcm",
+    return_paths: builtins.bool = False,
+) -> Datasets | builtins.tuple[Datasets, builtins.tuple[miot.PathLike, ...]]:
+    paths: builtins.tuple[miot.PathLike, ...]
+    if (
+        isinstance(dicom_path, (builtins.str, pathlib.Path))
+        and (_dcm_dir := pathlib.Path(dicom_path)).is_dir()
+    ):
+        paths = tuple(sorted(_dcm_dir.glob(f"*{extension}")))
+    elif (
+        not isinstance(dicom_path, (builtins.str, pathlib.Path))
+        and miou.is_iterable(dicom_path)
+        and all(str(p).endswith(extension) for p in dicom_path)  # type: ignore[union-attr]  # noqa: E501
+    ):
+        paths = tuple(dicom_path)  # type: ignore[arg-type]
+    else:
+        raise ValueError("dicom_path must be path to a dir. or a list of dcm paths")
+    datasets = (pydicom.dcmread(path, defer_size=defer_size) for path in paths)
+    return (datasets, paths) if return_paths else datasets
 
 
 @dataclasses.dataclass(frozen=True)
@@ -215,7 +242,7 @@ class SortedSlices:
             warnings.warn(f"{n_removed} anomalous images removed.")
         elif n_removed < 0:
             raise RuntimeError("Images added in remove image func. Report error.")
-        new_image_orientation = miou.to_f64(new_slices[0].ImageOrientationPatient)
+        new_image_orientation = miou.to_f64(most_common_orientation)
         new_cosines = Cosines.from_orientation(new_image_orientation)
         return SortedSlices(
             slices=new_slices,
@@ -351,23 +378,13 @@ class DICOMDir:
         defer_size: builtins.str | builtins.int | None = "1 KB",
         extension: builtins.str = ".dcm",
     ) -> DICOMDir:
-        paths: builtins.tuple[miot.PathLike, ...]
-        if (
-            isinstance(dicom_path, (builtins.str, pathlib.Path))
-            and (_dcm_dir := pathlib.Path(dicom_path)).is_dir()
-        ):
-            paths = tuple(sorted(_dcm_dir.glob(f"*{extension}")))
-        elif (
-            not isinstance(dicom_path, (builtins.str, pathlib.Path))
-            and miou.is_iterable(dicom_path)
-            and all(str(p).endswith(extension) for p in dicom_path)  # type: ignore[union-attr]  # noqa: E501
-        ):
-            paths = tuple(dicom_path)  # type: ignore[arg-type]
-        else:
-            raise ValueError("dicom_dir must be path to a dir. or a list of dcm paths")
-        images = tuple(pydicom.dcmread(path, defer_size=defer_size) for path in paths)
+        gathered = gather_dicom(
+            dicom_path, defer_size=defer_size, extension=extension, return_paths=True
+        )
+        assert isinstance(gathered, tuple)
+        images, paths = gathered  # unpack after type check for mypy
         return cls.from_datasets(
-            typing.cast(builtins.list[pydicom.Dataset], images),
+            tuple(images),
             paths=paths,
             max_nonuniformity=max_nonuniformity,
             fail_outside_max_nonuniformity=fail_outside_max_nonuniformity,
