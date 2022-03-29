@@ -2,6 +2,11 @@
 History
 =======
 
+0.2.12 (2022-03-29)
+------------------
+
+* Split out gather DICOM image and paths function from ``DICOMDir.from_path`` for external use.
+
 0.2.11 (2022-03-25)
 ------------------
 
