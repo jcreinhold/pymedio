@@ -201,15 +201,20 @@ class SortedSlices:
     ) -> None:
         if len(self) > 1:
             diffs = np.diff(self.positions)
+            warned = False
             if not np.allclose(diffs, diffs[0], atol=0.0, rtol=max_nonuniformity):
                 msg = f"The slice spacing is non-uniform. Slice spacings:\n{diffs}"
                 if fail_outside_max_nonuniformity:
                     raise mioe.OutsideMaxNonUniformity(msg)
                 else:
+                    warned = True
                     warnings.warn(msg)
             if not np.allclose(diffs, diffs[0], atol=0.0, rtol=missing_slices_cutoff):
                 msg = "There appear to be missing slices."
-                raise mioe.MissingSlicesException(msg)
+                if fail_outside_max_nonuniformity:
+                    raise mioe.MissingSlicesException(msg)
+                elif not warned:
+                    warnings.warn(msg)
 
     def remove_anomalous_slices(
         self,
