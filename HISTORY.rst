@@ -2,6 +2,11 @@
 History
 =======
 
+0.2.13 (2022-05-03)
+------------------
+
+* Only warn on apparent missing slice in ``SortedSlices`` when ``fail_on_max_nonuniformity`` false.
+
 0.2.12 (2022-03-29)
 ------------------
 
