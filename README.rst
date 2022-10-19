@@ -5,6 +5,9 @@ pymedio
 .. image:: https://img.shields.io/pypi/v/pymedio.svg
         :target: https://pypi.python.org/pypi/pymedio
 
+.. image:: https://img.shields.io/conda/vn/conda-forge/pymedio
+        :target: https://anaconda.org/conda-forge/pymedio
+
 .. image:: https://readthedocs.org/projects/pymedio/badge/?version=latest
         :target: https://pymedio.readthedocs.io/en/latest/?version=latest
         :alt: Documentation Status
@@ -41,6 +44,10 @@ Install
 The easiest way to install the package is through the following command::
 
     pip install pymedio
+
+Alternatively, this can be done via conda::
+
+    conda install -c conda-forge pymedio
 
 To install from the source directory, clone the repo and run::
 
