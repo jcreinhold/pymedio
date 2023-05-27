@@ -6,7 +6,6 @@ from __future__ import annotations
 
 __all__ = ["BasicImage"]
 
-import builtins
 import collections.abc
 import typing
 import warnings
@@ -24,7 +23,6 @@ _Image = typing.TypeVar("_Image", bound="BasicImage")
 
 
 class BasicImage(npt.NDArray[miot.DType]):
-
     _affine: npt.NDArray
 
     def __new__(
@@ -32,8 +30,8 @@ class BasicImage(npt.NDArray[miot.DType]):
         data: npt.ArrayLike,
         affine: npt.NDArray | None = None,
         *,
-        info: builtins.str | npt.NDArray[np.str_] | None = None,
-        copy: builtins.bool = False,
+        info: str | npt.NDArray[np.str_] | None = None,
+        copy: bool = False,
     ) -> _Image:
         obj = cls._check_data(data, copy=copy).view(cls)
         obj._affine = cls._check_affine(affine)
@@ -42,7 +40,7 @@ class BasicImage(npt.NDArray[miot.DType]):
         obj._info.flags.writeable = False
         return obj
 
-    def __array_finalize__(self, obj: builtins.object) -> None:
+    def __array_finalize__(self, obj: object) -> None:
         if obj is None:
             return
         self._affine = self._check_affine(getattr(obj, "_affine", None))
@@ -51,14 +49,14 @@ class BasicImage(npt.NDArray[miot.DType]):
         self._info.flags.writeable = False
 
     @property
-    def repr_properties(self) -> builtins.list[builtins.str]:
+    def repr_properties(self) -> list[str]:
         return [
             f"shape: {self.shape}",
             f"spacing: {self.get_spacing_string()}",
             f"dtype: {self.dtype.name}",
         ]
 
-    def __repr__(self) -> builtins.str:
+    def __repr__(self) -> str:
         if self.ndim == 0:
             return str(self.item())
         properties = "; ".join(self.repr_properties)
@@ -73,7 +71,6 @@ class BasicImage(npt.NDArray[miot.DType]):
         out: typing.Any = None,
         **kwargs: typing.Any,
     ) -> typing.Any:
-
         affine = self.affine
         info = self.info
 
@@ -131,7 +128,7 @@ class BasicImage(npt.NDArray[miot.DType]):
         return self._info
 
     @info.setter
-    def info(self, new_info: builtins.str | npt.NDArray[np.str_] | None) -> None:
+    def info(self, new_info: str | npt.NDArray[np.str_] | None) -> None:
         self._info = self._check_info(new_info)
 
     @property
@@ -140,29 +137,29 @@ class BasicImage(npt.NDArray[miot.DType]):
         return direction
 
     @property
-    def spacing(self) -> builtins.tuple[miot.Float, ...]:
+    def spacing(self) -> tuple[miot.Float, ...]:
         """Voxel spacing in mm."""
         _, spacing = miou.get_rotation_and_spacing_from_affine(self.affine)
         return tuple(spacing)
 
     @property
-    def origin(self) -> builtins.tuple[miot.Float, ...]:
+    def origin(self) -> tuple[miot.Float, ...]:
         """Center of first voxel in array, in mm."""
         return tuple(self.affine[:3, 3])
 
     @property
     def memory(self) -> miot.Int:
         """Number of bytes that the image array occupies in RAM"""
-        mem: builtins.int = np.prod(self.shape) * self.itemsize
+        mem: int = np.prod(self.shape) * self.itemsize
         return mem
 
-    def get_spacing_string(self) -> builtins.str:
+    def get_spacing_string(self) -> str:
         strings = [f"{n:.2g}" for n in self.spacing]
         string = f'({", ".join(strings)})'
         return string
 
     @staticmethod
-    def _check_data(data: npt.ArrayLike, copy: builtins.bool) -> npt.NDArray:
+    def _check_data(data: npt.ArrayLike, copy: bool) -> npt.NDArray:
         data = np.array(data, copy=copy)
         if np.isnan(data).any():
             warnings.warn("NaNs found in data", RuntimeWarning)
@@ -185,7 +182,7 @@ class BasicImage(npt.NDArray[miot.DType]):
 
     @staticmethod
     def _check_info(
-        info: builtins.str | npt.NDArray[np.str_] | None,
+        info: str | npt.NDArray[np.str_] | None,
     ) -> npt.NDArray[np.str_]:
         if info is None:
             info = ""
@@ -206,7 +203,7 @@ class BasicImage(npt.NDArray[miot.DType]):
     def torch_compatible(self) -> npt.NDArray:
         return miou.ensure_4d(miou.check_uint_to_int(np.asarray(self)))
 
-    def resample_image(self, shape: collections.abc.Sequence[builtins.int]) -> _Image:
+    def resample_image(self, shape: collections.abc.Sequence[int]) -> _Image:
         if self.ndim != len(shape):
             raise ValueError("length of 'shape' != number of dimensions in image.")
         if any(s <= 0 for s in shape):

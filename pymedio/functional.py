@@ -14,7 +14,6 @@ __all__ = [
     "write_matrix",
 ]
 
-import builtins
 import gzip
 import logging
 import pathlib
@@ -41,18 +40,18 @@ IMAGE_2D_FORMATS = _2d_formats + [s.upper() for s in _2d_formats]
 
 NibabelImageClass = typing.Type[
     typing.Union[
-        nib.Nifti1Pair,
-        nib.Nifti1Image,
-        nib.Nifti2Pair,
-        nib.Cifti2Image,
-        nib.Nifti2Image,
-        nib.Spm2AnalyzeImage,
-        nib.Spm99AnalyzeImage,
-        nib.AnalyzeImage,
-        nib.Minc1Image,
-        nib.Minc2Image,
-        nib.MGHImage,
-        nib.GiftiImage,
+        nib.nifti1.Nifti1Pair,
+        nib.nifti1.Nifti1Image,
+        nib.nifti2.Nifti2Pair,
+        nib.nifti2.Nifti2Image,
+        nib.cifti2.cifti2.Cifti2Image,
+        nib.spm2analyze.Spm2AnalyzeImage,
+        nib.spm99analyze.Spm99AnalyzeImage,
+        nib.analyze.AnalyzeImage,
+        nib.minc1.Minc1Image,
+        nib.minc2.Minc2Image,
+        nib.freesurfer.mghformat.MGHImage,
+        nib.gifti.gifti.GiftiImage,
     ]
 ]
 
@@ -63,7 +62,7 @@ def read_image(
     path: miot.PathLike,
     *,
     dtype: typing.Type[miot.DType] | None = None,
-    eager: builtins.bool = True,
+    eager: bool = True,
 ) -> miot.DataAffine[miot.DType]:
     try:
         result = _read_sitk(path, dtype=dtype, copy=eager)
@@ -72,7 +71,7 @@ def read_image(
         warnings.warn(message)
         try:
             result = _read_nibabel(path, dtype=dtype, mmap=not eager)
-        except nib.loadsave.ImageFileError as exn2:
+        except nib.loadsave.ImageFileError as exn2:  # type: ignore[attr-defined]
             message = (
                 f"File '{path}' not understood."
                 " Check supported formats by at"
@@ -87,17 +86,19 @@ def read_image_from_stream(
     stream: typing.IO,
     *,
     dtype: typing.Type[miot.DType] | None = None,
-    gzipped: builtins.bool = False,
+    gzipped: bool = False,
     image_class: typing.Optional[NibabelImageClass] = None,
 ) -> miot.DataAffine[miot.DType]:
     """https://mail.python.org/pipermail/neuroimaging/2017-February/001345.html"""
     _stream = gzip.GzipFile(fileobj=stream) if gzipped else stream
-    fh = nib.FileHolder(fileobj=_stream)
+    fh = nib.fileholders.FileHolder(fileobj=_stream)  # type: ignore[arg-type]
     if image_class is None:
         for cls in nib.imageclasses.all_image_classes:
             if hasattr(cls, "from_file_map"):
                 try:
-                    img = cls.from_file_map({"header": fh, "image": fh}, mmap=False)
+                    args = {"header": fh, "image": fh}
+                    kws = {"mmap": False}
+                    img = cls.from_file_map(args, **kws)  # type: ignore[call-arg]
                     break
                 except Exception:
                     logger.debug(traceback.format_exc())
@@ -105,11 +106,11 @@ def read_image_from_stream(
             raise RuntimeError("Couldn't open data stream.")
     else:
         img = image_class.from_file_map({"header": fh, "image": fh}, mmap=False)
-    data = img.get_fdata(dtype=dtype)
+    data = img.get_fdata(dtype=dtype)  # type: ignore[attr-defined]
     if data.ndim == 5:
         data = data[..., 0, :]
         data = data.transpose(3, 0, 1, 2)
-    affine = img.affine
+    affine = img.affine  # type: ignore[attr-defined]
     return data, affine
 
 
@@ -117,14 +118,14 @@ def _read_nibabel(
     path: miot.PathLike,
     *,
     dtype: typing.Type[miot.DType] | None = None,
-    mmap: builtins.bool = False,
+    mmap: bool = False,
 ) -> miot.DataAffine[miot.DType]:
-    img = nib.load(str(path), mmap=mmap)
-    data = img.get_fdata(dtype=dtype)
+    img = nib.loadsave.load(str(path), mmap=mmap)
+    data = img.get_fdata(dtype=dtype)  # type: ignore[attr-defined]
     if data.ndim == 5:
         data = data[..., 0, :]
         data = data.transpose(3, 0, 1, 2)
-    affine = miou.to_f64(img.affine)
+    affine = miou.to_f64(img.affine)  # type: ignore[attr-defined]
     return data, affine
 
 
@@ -132,7 +133,7 @@ def _read_sitk(
     path: miot.PathLike,
     *,
     dtype: typing.Type[miot.DType] | None = None,
-    copy: builtins.bool = True,
+    copy: bool = True,
 ) -> miot.DataAffine[miot.DType]:
     if pathlib.Path(path).is_dir():  # assume DICOM
         image = _read_dicom_sitk(path)
@@ -153,7 +154,7 @@ def _read_dicom_sitk(directory: miot.PathLike) -> sitk.Image:
         raise FileNotFoundError(message)
     reader.SetFileNames(dicom_names)
     image = reader.Execute()
-    return image
+    return typing.cast(sitk.Image, image)
 
 
 def read_shape(path: miot.PathLike) -> miot.Shape:
@@ -178,9 +179,7 @@ def read_affine(path: miot.PathLike) -> npt.NDArray[np.float64]:
     return affine
 
 
-def get_reader(
-    path: miot.PathLike, *, read: builtins.bool = True
-) -> sitk.ImageFileReader:
+def get_reader(path: miot.PathLike, *, read: bool = True) -> sitk.ImageFileReader:
     reader = sitk.ImageFileReader()
     reader.SetFileName(str(path))
     if read:
@@ -193,8 +192,8 @@ def write_image(
     affine: npt.NDArray,
     path: miot.PathLike,
     *,
-    squeeze: builtins.bool = True,
-    **write_sitk_kwargs: builtins.bool,
+    squeeze: bool = True,
+    **write_sitk_kwargs: bool,
 ) -> None:
     if squeeze:
         array = array.squeeze()
@@ -220,17 +219,18 @@ def _write_nibabel(
     elif array.ndim == 4:
         array = array.transpose((1, 2, 3, 0))
     suffix = pathlib.Path(str(path).replace(".gz", "")).suffix
+    img: typing.Union[nib.nifti1.Nifti1Image, nib.nifti1.Nifti1Pair]
     if ".nii" in suffix:
-        img = nib.Nifti1Image(np.asanyarray(array), affine)
+        img = nib.nifti1.Nifti1Image(np.asanyarray(array), affine)
     elif ".hdr" in suffix or ".img" in suffix:
-        img = nib.Nifti1Pair(np.asanyarray(array), affine)
+        img = nib.nifti1.Nifti1Pair(np.asanyarray(array), affine)
     else:
-        raise nib.loadsave.ImageFileError
+        raise nib.loadsave.ImageFileError  # type: ignore[attr-defined]
     if num_components > 1:
         img.header.set_intent("vector")
     img.header["qform_code"] = 1
     img.header["sform_code"] = 0
-    nib.save(img, str(path))
+    nib.loadsave.save(img, str(path))
 
 
 def _write_sitk(
@@ -238,8 +238,8 @@ def _write_sitk(
     affine: npt.NDArray,
     path: miot.PathLike,
     *,
-    use_compression: builtins.bool = True,
-    is_multichannel: builtins.bool = False,
+    use_compression: bool = True,
+    is_multichannel: bool = False,
 ) -> None:
     path = pathlib.Path(path)
     if path.suffix in (".png", ".jpg", ".jpeg", ".bmp"):
@@ -312,7 +312,7 @@ def _write_itk_matrix(matrix: npt.NDArray, tfm_path: miot.PathLike) -> None:
 
 
 def _matrix_to_itk_transform(
-    matrix: npt.NDArray, *, dims: builtins.int = 3
+    matrix: npt.NDArray, *, dims: int = 3
 ) -> sitk.AffineTransform:
     matrix = _to_itk_convention(matrix)
     rotation = matrix[:dims, :dims].ravel().tolist()
@@ -338,7 +338,7 @@ def array_to_sitk(
     array: npt.NDArray,
     affine: npt.NDArray,
     *,
-    is_multichannel: builtins.bool = False,
+    is_multichannel: bool = False,
 ) -> sitk.Image:
     """Create a SimpleITK image from an array and a 4x4 affine matrix."""
     ndim = array.ndim
@@ -370,7 +370,7 @@ def sitk_to_array(
     image: sitk.Image,
     *,
     dtype: typing.Type[miot.DType] | None = None,
-    copy: builtins.bool = True,
+    copy: bool = True,
 ) -> miot.DataAffine[miot.DType]:
     arr = sitk.GetArrayFromImage(image) if copy else sitk.GetArrayViewFromImage(image)
     data: np.ndarray = np.asarray(arr, dtype=dtype).transpose()

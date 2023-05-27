@@ -15,7 +15,6 @@ __all__ = [
     "TripletFloat",
 ]
 
-import builtins
 import collections.abc
 import os
 import typing
@@ -26,24 +25,24 @@ import numpy.typing as npt
 DType = typing.TypeVar("DType", bound=np.generic, covariant=True)
 T = typing.TypeVar("T", bound=npt.NBitBase)
 
-Float = typing.Union[np.floating[T], builtins.float]
-Int = typing.Union[np.integer[T], builtins.int]
+Float = typing.Union[np.floating[T], float]
+Int = typing.Union[np.integer[T], int]
 
 # https://www.python.org/dev/peps/pep-0519/#provide-specific-type-hinting-support
-Bound = builtins.tuple[Float[T], Float[T]]
-Bounds = builtins.tuple[Bound[T], Bound[T], Bound[T]]
-DataAffine = builtins.tuple[npt.NDArray[DType], npt.NDArray[np.float64]]
-Direction2D = builtins.tuple[Float[T], Float[T], Float[T], Float[T]]
-Direction3D = builtins.tuple[Float[T], Float[T], Float[T], Float[T], Float[T], Float[T]]
+Bound = tuple[Float[T], Float[T]]
+Bounds = tuple[Bound[T], Bound[T], Bound[T]]
+DataAffine = tuple[npt.NDArray[DType], npt.NDArray[np.float64]]
+Direction2D = tuple[Float[T], Float[T], Float[T], Float[T]]
+Direction3D = tuple[Float[T], Float[T], Float[T], Float[T], Float[T], Float[T]]
 Direction = typing.Union[Direction2D[T], Direction3D[T]]
-PathLike = typing.Union[builtins.str, os.PathLike]
-Shape = builtins.tuple[Int[T], ...]
+PathLike = typing.Union[str, os.PathLike]
+Shape = tuple[Int[T], ...]
 ShapeLike = typing.Union[
     typing.SupportsIndex, collections.abc.Sequence[typing.SupportsIndex]
 ]
-TripletFloat = builtins.tuple[Float[T], Float[T], Float[T]]
+TripletFloat = tuple[Float[T], Float[T], Float[T]]
 
 
-class SupportsArray(typing.Protocol):
-    def __array__(self) -> npt.NDArray:
+class SupportsArray(typing.Protocol[DType]):
+    def __array__(self) -> npt.NDArray[DType]:
         ...

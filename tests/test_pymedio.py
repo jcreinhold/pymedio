@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 import gzip
 import io
 import pathlib
@@ -29,7 +28,7 @@ DIST = 1e-05
 @pytest.fixture(scope="session")
 def dicom_image_path() -> pathlib.Path:
     path = get_testdata_file(TEST_IMAGE_NAME, read=False)
-    assert isinstance(path, builtins.str)
+    assert isinstance(path, str)
     return pathlib.Path(path)
 
 
@@ -62,7 +61,7 @@ def nifti() -> nib.Nifti1Image:
 def _make_nifti_path(
     tmp_path_factory: pytest.TempPathFactory,
     nifti: nib.Nifti1Image,
-    extension: builtins.str,
+    extension: str,
 ) -> pathlib.Path:
     dcm_dir = tmp_path_factory.mktemp(extension.replace(".", "")).resolve(strict=True)
     path = dcm_dir / ("test" + extension)
@@ -98,7 +97,7 @@ def zipped_dicom_path(
 
 
 @pytest.fixture(scope="session")
-def encryption_key() -> builtins.bytes:
+def encryption_key() -> bytes:
     return crypto.Fernet.generate_key()
 
 
@@ -106,7 +105,7 @@ def encryption_key() -> builtins.bytes:
 def zipped_encrypted_dicom_path(
     tmp_path_factory: pytest.TempPathFactory,
     dicom_image: pydicom.Dataset,
-    encryption_key: builtins.bytes,
+    encryption_key: bytes,
 ) -> pathlib.Path:
     zipped_path = tmp_path_factory.getbasetemp().resolve(strict=True) / "dcm.zip"
     fernet = crypto.Fernet(encryption_key)
@@ -209,7 +208,7 @@ def test_dicom_image_from_zipped_stream(zipped_dicom_path: pathlib.Path) -> None
 
 
 def test_dicom_image_from_zipped_stream_encrypted(
-    zipped_encrypted_dicom_path: pathlib.Path, encryption_key: builtins.bytes
+    zipped_encrypted_dicom_path: pathlib.Path, encryption_key: bytes
 ) -> None:
     with open(zipped_encrypted_dicom_path, "rb") as f:
         image: mioi.Image = mioi.Image.from_dicom_zipped_stream(

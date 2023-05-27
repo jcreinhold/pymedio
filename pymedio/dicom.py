@@ -11,7 +11,6 @@ __all__ = [
     "gather_dicom",
 ]
 
-import builtins
 import collections.abc
 import dataclasses
 import functools
@@ -47,25 +46,25 @@ T = typing.TypeVar("T")
 Datasets = typing.Iterable[pydicom.Dataset]
 
 
-def _all_float_like(seq: collections.abc.Sequence[builtins.float]) -> builtins.bool:
+def _all_float_like(seq: collections.abc.Sequence[float]) -> bool:
     return all(isinstance(x, (float, int)) for x in seq)
 
 
 def gather_dicom(
     dicom_path: miot.PathLike | typing.Iterable[miot.PathLike],
     *,
-    defer_size: builtins.str | builtins.int | None = "1 KB",
-    extension: builtins.str = ".dcm",
-    return_paths: builtins.bool = False,
-) -> Datasets | builtins.tuple[Datasets, builtins.tuple[miot.PathLike, ...]]:
-    paths: builtins.tuple[miot.PathLike, ...]
+    defer_size: str | int | None = "1 KB",
+    extension: str = ".dcm",
+    return_paths: bool = False,
+) -> Datasets | tuple[Datasets, tuple[miot.PathLike, ...]]:
+    paths: tuple[miot.PathLike, ...]
     if (
-        isinstance(dicom_path, (builtins.str, pathlib.Path))
+        isinstance(dicom_path, (str, pathlib.Path))
         and (_dcm_dir := pathlib.Path(dicom_path)).is_dir()
     ):
         paths = tuple(sorted(_dcm_dir.glob(f"*{extension}")))
     elif (
-        not isinstance(dicom_path, (builtins.str, pathlib.Path))
+        not isinstance(dicom_path, (str, pathlib.Path))
         and miou.is_iterable(dicom_path)
         and all(str(p).endswith(extension) for p in dicom_path)  # type: ignore[union-attr]  # noqa: E501
     ):
@@ -84,13 +83,13 @@ class Cosines:
     column: npt.NDArray
     slice: npt.NDArray
 
-    def __repr__(self) -> builtins.str:
+    def __repr__(self) -> str:
         return f"Cosines(row={self.row}, column={self.column}, slice={self.slice})"
 
     @classmethod
     def from_orientation(
         cls: typing.Type[Cosines],
-        image_orientation: typing.Sequence[builtins.float] | npt.NDArray,
+        image_orientation: typing.Sequence[float] | npt.NDArray,
     ) -> Cosines:
         if isinstance(image_orientation, np.ndarray):
             if image_orientation.size != 6 or image_orientation.ndim != 1:
@@ -121,17 +120,17 @@ class Cosines:
         warn_msg_cn = f"Column direction cosine's magnitude not quite 1: {self.column}"
         self._validate_value(col_cosine_norm, err_msg_cn, warn_msg_cn, self._almost_one)
 
-    def writable(self, value: builtins.bool, /) -> None:
+    def writable(self, value: bool, /) -> None:
         self.row.flags.writeable = value
         self.column.flags.writeable = value
         self.slice.flags.writeable = value
 
     @staticmethod
     def _validate_value(
-        value: builtins.float,
-        err_msg: builtins.str,
-        warn_msg: builtins.str,
-        check_func: typing.Callable[..., builtins.bool],
+        value: float,
+        err_msg: str,
+        warn_msg: str,
+        check_func: typing.Callable[..., bool],
     ) -> None:
         if not check_func(value, atol=1e-4):
             raise mioe.DicomImportException(value, err_msg)
@@ -139,27 +138,27 @@ class Cosines:
             warnings.warn(warn_msg)
 
     @staticmethod
-    def _almost_zero(value: builtins.float, *, atol: builtins.float) -> builtins.bool:
+    def _almost_zero(value: float, *, atol: float) -> bool:
         return math.isclose(value, 0.0, abs_tol=atol)
 
     @staticmethod
-    def _almost_one(value: builtins.float, *, atol: builtins.float) -> builtins.bool:
+    def _almost_one(value: float, *, atol: float) -> bool:
         return math.isclose(value, 1.0, abs_tol=atol)
 
 
 @dataclasses.dataclass(frozen=True)
 class SortedSlices:
-    slices: builtins.tuple[pydicom.Dataset, ...]
-    indices: builtins.tuple[builtins.int, ...]  # mapping to get original slice order
-    positions: builtins.tuple[builtins.float, ...]
+    slices: tuple[pydicom.Dataset, ...]
+    indices: tuple[int, ...]  # mapping to get original slice order
+    positions: tuple[float, ...]
     cosines: Cosines
 
-    def __repr__(self) -> builtins.str:
+    def __repr__(self) -> str:
         return f"SortedSlices(n_slices={len(self)}, cosines={self.cosines!r})"
 
-    def __len__(self) -> builtins.int:
+    def __len__(self) -> int:
         _len = len(self.slices)
-        exn_msg: builtins.list[builtins.str] = []
+        exn_msg: list[str] = []
         if _len != (ind_len := len(self.indices)):
             exn_msg.append(f"num slices {_len} != num indices {ind_len}")
         if _len != (pos_len := len(self.positions)):
@@ -180,7 +179,7 @@ class SortedSlices:
         ipps = (miou.to_f64(sd.ImagePositionPatient) for sd in slice_datasets)
         positions = (np.dot(cosines.slice, imp).item() for imp in ipps)
         _sorted = typing.cast(
-            typing.Iterable[builtins.tuple[builtins.int, builtins.float]],
+            typing.Iterable[tuple[int, float]],
             sorted(enumerate(positions), key=operator.itemgetter(1)),
         )
         sorted_indices, sorted_positions = miou.unzip(_sorted)
@@ -195,9 +194,9 @@ class SortedSlices:
     def check_nonuniformity(
         self,
         *,
-        max_nonuniformity: builtins.float = 5e-4,
-        fail_outside_max_nonuniformity: builtins.bool = True,
-        missing_slices_cutoff: builtins.float = 1e-1,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        missing_slices_cutoff: float = 1e-1,
     ) -> None:
         if len(self) > 1:
             diffs = np.diff(self.positions)
@@ -219,8 +218,8 @@ class SortedSlices:
     def remove_anomalous_slices(
         self,
         *,
-        strict_unique_orientation: builtins.bool = True,
-        unique_positions: builtins.bool = True,
+        strict_unique_orientation: bool = True,
+        unique_positions: bool = True,
     ) -> SortedSlices:
         to_float_tuple = lambda xs: tuple(float(x) for x in xs)  # noqa: E731
         orientations = [to_float_tuple(s.ImageOrientationPatient) for s in self.slices]
@@ -261,8 +260,8 @@ class SortedSlices:
         return miou.to_f64(self.slices[0].ImagePositionPatient)
 
     @functools.cached_property
-    def slice_spacing(self) -> builtins.float:
-        spacing: builtins.float
+    def slice_spacing(self) -> float:
+        spacing: float
         if len(self) > 1:
             slice_positions_diffs = np.diff(np.sort(self.positions))
             # avg. b/c that's what ITK seems to use, so use for consistency
@@ -289,13 +288,13 @@ class SortedSlices:
     def _approx_unique(
         values: typing.Sequence[T],
         *,
-        atol: builtins.float = ORIENTATION_ATOL,
-    ) -> builtins.tuple[T, ...]:
+        atol: float = ORIENTATION_ATOL,
+    ) -> tuple[T, ...]:
         # TODO: improve computational efficiency
         # TODO: fix bad init -> bad result
         if not values:
             return tuple()
-        approx_unique: builtins.dict[T, builtins.int] = dict()
+        approx_unique: dict[T, int] = dict()
         for val in values:
             min_dist = np.inf
             min_dist_val = None
@@ -321,19 +320,19 @@ class SortedSlices:
 
     def _zip_with(
         self, *args: typing.Iterable[typing.Any]
-    ) -> typing.Iterable[builtins.tuple[typing.Any, ...]]:
+    ) -> typing.Iterable[tuple[typing.Any, ...]]:
         return zip(self.slices, self.indices, self.positions, *args)
 
 
 @dataclasses.dataclass(frozen=True)
 class DICOMDir:
-    slices: builtins.tuple[pydicom.Dataset, ...]
-    positions: builtins.tuple[builtins.float, ...]
-    slice_spacing: builtins.float
+    slices: tuple[pydicom.Dataset, ...]
+    positions: tuple[float, ...]
+    slice_spacing: float
     affine: npt.NDArray
-    paths: builtins.tuple[miot.PathLike, ...] | None = None
+    paths: tuple[miot.PathLike, ...] | None = None
 
-    def __len__(self) -> builtins.int:
+    def __len__(self) -> int:
         _len = len(self.slices)
         if self.paths is not None and _len != (path_len := len(self.paths)):
             raise RuntimeError(f"num slices {_len} != num paths {path_len}")
@@ -345,9 +344,9 @@ class DICOMDir:
         datasets: typing.Sequence[pydicom.Dataset],
         *,
         paths: typing.Sequence[miot.PathLike] | None = None,
-        max_nonuniformity: builtins.float = 5e-4,
-        fail_outside_max_nonuniformity: builtins.bool = True,
-        remove_anomalous_images: builtins.bool = True,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        remove_anomalous_images: bool = True,
     ) -> DICOMDir:
         if not datasets:
             msg = "Must provide at least one image DICOM dataset"
@@ -377,11 +376,11 @@ class DICOMDir:
         cls: typing.Type[DICOMDir],
         dicom_path: miot.PathLike | typing.Iterable[miot.PathLike],
         *,
-        max_nonuniformity: builtins.float = 5e-4,
-        fail_outside_max_nonuniformity: builtins.bool = True,
-        remove_anomalous_images: builtins.bool = True,
-        defer_size: builtins.str | builtins.int | None = "1 KB",
-        extension: builtins.str = ".dcm",
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        remove_anomalous_images: bool = True,
+        defer_size: str | int | None = "1 KB",
+        extension: str = ".dcm",
     ) -> DICOMDir:
         gathered = gather_dicom(
             dicom_path, defer_size=defer_size, extension=extension, return_paths=True
@@ -401,10 +400,10 @@ class DICOMDir:
         cls: typing.Type[DICOMDir],
         data_stream: typing.IO,
         *,
-        max_nonuniformity: builtins.float = 5e-4,
-        fail_outside_max_nonuniformity: builtins.bool = True,
-        remove_anomalous_images: builtins.bool = True,
-        encryption_key: builtins.bytes | builtins.str | None = None,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        remove_anomalous_images: bool = True,
+        encryption_key: bytes | str | None = None,
         **zip_kwargs: typing.Any,
     ) -> DICOMDir:
         if encryption_key is not None:
@@ -428,8 +427,8 @@ class DICOMDir:
     @staticmethod
     def dicom_datasets_from_zip(
         zip_file: zipfile.ZipFile,
-    ) -> builtins.list[pydicom.Dataset]:
-        datasets: builtins.list[pydicom.Dataset] = []
+    ) -> list[pydicom.Dataset]:
+        datasets: list[pydicom.Dataset] = []
         for name in zip_file.namelist():
             if name.endswith("/"):
                 continue  # skip directories
@@ -464,10 +463,10 @@ class DICOMDir:
             "ImageOrientationPatient", atol=ORIENTATION_ATOL
         )
 
-    def writable(self, value: builtins.bool, /) -> None:
+    def writable(self, value: bool, /) -> None:
         self.affine.flags.writeable = value
 
-    def _slice_attribute_equal(self, property_name: builtins.str) -> None:
+    def _slice_attribute_equal(self, property_name: str) -> None:
         initial_value = getattr(self.slices[0], property_name, None)
         for dataset in self.slices[1:]:
             value = getattr(dataset, property_name, None)
@@ -478,9 +477,9 @@ class DICOMDir:
 
     def _slice_attribute_almost_equal(
         self,
-        property_name: builtins.str,
+        property_name: str,
         *,
-        atol: builtins.float,
+        atol: float,
     ) -> None:
         initial_value: miot.SupportsArray | None
         initial_value = getattr(self.slices[0], property_name, None)
@@ -496,10 +495,10 @@ class DICOMDir:
                 raise mioe.DicomImportException(msg)
 
     @staticmethod
-    def _is_dicomdir(dataset: pydicom.Dataset) -> builtins.bool:
-        media_sop_class: builtins.str | None
+    def _is_dicomdir(dataset: pydicom.Dataset) -> bool:
+        media_sop_class: str | None
         media_sop_class = getattr(dataset, "MediaStorageSOPClassUID", None)
-        result: builtins.bool = media_sop_class == "1.2.840.10008.1.3.10"
+        result: bool = media_sop_class == "1.2.840.10008.1.3.10"
         return result
 
 
@@ -509,7 +508,7 @@ class DICOMImage(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-
         cls: typing.Type[DICOMImage],
         dicom_dir: DICOMDir,
         *,
-        rescale: builtins.bool | None = None,
+        rescale: bool | None = None,
         rescale_dtype: typing.Type[miot.DType] | None = None,
         order: typing.Literal["F", "C"] | None = None,
     ) -> DICOMImage[miot.DType]:
@@ -523,13 +522,13 @@ class DICOMImage(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-
         cls: typing.Type[DICOMImage],
         dicom_path: miot.PathLike | typing.Iterable[miot.PathLike],
         *,
-        max_nonuniformity: builtins.float = 5e-4,
-        fail_outside_max_nonuniformity: builtins.bool = True,
-        remove_anomalous_images: builtins.bool = True,
-        rescale: builtins.bool | None = None,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        remove_anomalous_images: bool = True,
+        rescale: bool | None = None,
         rescale_dtype: typing.Type[miot.DType] | None = None,
         order: typing.Literal["F", "C"] | None = None,
-        extension: builtins.str = ".dcm",
+        extension: str = ".dcm",
     ) -> DICOMImage[miot.DType]:
         dicomdir = DICOMDir.from_path(
             dicom_path,
@@ -547,11 +546,11 @@ class DICOMImage(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-
         cls: typing.Type[DICOMImage],
         data_stream: typing.IO,
         *,
-        max_nonuniformity: builtins.float = 5e-4,
-        fail_outside_max_nonuniformity: builtins.bool = True,
-        remove_anomalous_images: builtins.bool = True,
-        encryption_key: builtins.bytes | builtins.str | None = None,
-        rescale: builtins.bool | None = None,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        remove_anomalous_images: bool = True,
+        encryption_key: bytes | str | None = None,
+        rescale: bool | None = None,
         rescale_dtype: typing.Type[miot.DType] | None = None,
         order: typing.Literal["F", "C"] | None = None,
         **zip_kwargs: typing.Any,
@@ -573,7 +572,7 @@ class DICOMImage(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-
         cls: typing.Type[DICOMImage],
         slices: typing.Sequence[pydicom.Dataset],
         *,
-        rescale: builtins.bool | None = None,
+        rescale: bool | None = None,
         rescale_dtype: typing.Type[miot.DType] | None = None,
         order: typing.Literal["F", "C"] | None = None,
     ) -> npt.NDArray:
@@ -622,5 +621,5 @@ class DICOMImage(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-
         return voxels
 
     @staticmethod
-    def _requires_rescaling(dataset: pydicom.Dataset) -> builtins.bool:
+    def _requires_rescaling(dataset: pydicom.Dataset) -> bool:
         return hasattr(dataset, "RescaleSlope") or hasattr(dataset, "RescaleIntercept")

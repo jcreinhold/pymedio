@@ -29,7 +29,8 @@ import pymedio.typing as miot
 def _create_flip_matrix(
     elements: builtins.tuple[miot.Float, ...]
 ) -> npt.NDArray[np.float64]:
-    matrix: npt.NDArray = to_f64(np.diag(elements))
+    matrix: npt.NDArray[np.float64]
+    matrix = to_f64(np.diag(elements))  # type: ignore[arg-type]
     return matrix
 
 

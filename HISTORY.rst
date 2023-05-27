@@ -3,22 +3,22 @@ History
 =======
 
 0.2.13 (2022-05-03)
-------------------
+-------------------
 
 * Only warn on apparent missing slice in ``SortedSlices`` when ``fail_on_max_nonuniformity`` false.
 
 0.2.12 (2022-03-29)
-------------------
+-------------------
 
 * Split out gather DICOM image and paths function from ``DICOMDir.from_path`` for external use.
 
 0.2.11 (2022-03-25)
-------------------
+-------------------
 
 * Move non-uniformity check after removing anomalous slices in ``DICOMDir``.
 
 0.2.10 (2022-03-15)
-------------------
+-------------------
 
 * Fix bug in ``info`` getter in ``BasicImage`` which retrieved ``affine`` instead of ``info``.
 

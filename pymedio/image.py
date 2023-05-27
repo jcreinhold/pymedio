@@ -9,7 +9,6 @@ from __future__ import annotations
 
 __all__ = ["Image"]
 
-import builtins
 import typing
 import zipfile
 
@@ -31,16 +30,16 @@ import pymedio.typing as miot
 
 class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
     @property
-    def repr_properties(self) -> builtins.list[builtins.str]:
+    def repr_properties(self) -> list[str]:
         props = super().repr_properties
         props += [f"orientation: {''.join(self.orientation)}+"]
         return props
 
     @property
-    def orientation(self) -> builtins.tuple[builtins.str, builtins.str, builtins.str]:
+    def orientation(self) -> tuple[str, str, str]:
         """Orientation codes."""
-        codes: builtins.tuple[builtins.str, builtins.str, builtins.str]
-        codes = nib.aff2axcodes(self.affine)
+        codes: tuple[str, str, str]
+        codes = nib.orientations.aff2axcodes(self.affine)
         return codes
 
     @property
@@ -52,7 +51,7 @@ class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
         point_fin = nib.affines.apply_affine(self.affine, fin)
         return np.asarray((point_ini, point_fin))
 
-    def axis_name_to_index(self, axis: builtins.str) -> builtins.int:
+    def axis_name_to_index(self, axis: str) -> int:
         # Top and bottom are used for the vertical 2D axis as the use of
         # Height vs Horizontal might be ambiguous
         if not isinstance(axis, str):
@@ -72,7 +71,7 @@ class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
             return index
 
     @staticmethod
-    def flip_axis(axis: builtins.str) -> builtins.str:
+    def flip_axis(axis: str) -> str:
         labels = "LRPAISTBDV"
         first = labels[::2]
         last = labels[1::2]
@@ -95,13 +94,13 @@ class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
         bounds_x, bounds_y, bounds_z = array.T.tolist()
         return bounds_x, bounds_y, bounds_z
 
-    def save(self, path: miot.PathLike, *, squeeze: builtins.bool = True) -> None:
+    def save(self, path: miot.PathLike, *, squeeze: bool = True) -> None:
         miof.write_image(np.array(self), self.affine, path, squeeze=squeeze)
 
     def to_filename(self, path: miot.PathLike) -> None:
         self.save(path, squeeze=False)
 
-    def get_center(self, lps: builtins.bool = False) -> miot.TripletFloat:
+    def get_center(self, lps: bool = False) -> miot.TripletFloat:
         """Get image center in RAS+ or LPS+ coordinates"""
         size: np.ndarray = np.asarray(self.shape)
         center_index = (size - 1) / 2
@@ -114,7 +113,7 @@ class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
         path: miot.PathLike,
         *,
         dtype: typing.Type[miot.DType] | None = None,
-        eager: builtins.bool = True,
+        eager: bool = True,
     ) -> Image[miot.DType]:
         data, affine = miof.read_image(path, dtype=dtype, eager=eager)
         return cls(data=data, affine=affine)
@@ -125,7 +124,7 @@ class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
         data_stream: typing.IO,
         *,
         dtype: typing.Type[miot.DType] | None = None,
-        gzipped: builtins.bool = False,
+        gzipped: bool = False,
         image_class: miof.NibabelImageClass | None = None,
     ) -> Image[miot.DType]:
         data, affine = miof.read_image_from_stream(
@@ -139,7 +138,7 @@ class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
         data_stream: typing.IO,
         *,
         dtype: typing.Type[miot.DType] | None = None,
-        gzipped: builtins.bool = False,
+        gzipped: bool = False,
         image_class: miof.NibabelImageClass | None = None,
         **zip_kwargs: typing.Any,
     ) -> Image[miot.DType]:
@@ -178,11 +177,11 @@ class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
         cls: typing.Type[Image],
         data_stream: typing.IO,
         *,
-        max_nonuniformity: builtins.float = 5e-4,
-        fail_outside_max_nonuniformity: builtins.bool = True,
-        remove_anomalous_images: builtins.bool = True,
-        encryption_key: builtins.bytes | builtins.str | None = None,
-        rescale: builtins.bool | None = None,
+        max_nonuniformity: float = 5e-4,
+        fail_outside_max_nonuniformity: bool = True,
+        remove_anomalous_images: bool = True,
+        encryption_key: bytes | str | None = None,
+        rescale: bool | None = None,
         rescale_dtype: typing.Type[miot.DType] | None = None,
     ) -> Image[miot.DType]:
         dicom_image = miod.DICOMImage.from_zipped_stream(
@@ -196,9 +195,9 @@ class Image(miob.BasicImage[typing.Any, miot.DType]):  # type: ignore[type-arg]
         )
         return cls.from_dicom_image(dicom_image)
 
-    def to_sitk(self, **kwargs: builtins.bool) -> sitk.Image:
+    def to_sitk(self, **kwargs: bool) -> sitk.Image:
         """Get the image as an instance of :class:`sitk.Image`."""
         return miof.array_to_sitk(np.array(self), self.affine, **kwargs)
 
-    def to_nibabel(self) -> nib.Nifti1Image:
-        return nib.Nifti1Image(np.array(self), self.affine)
+    def to_nibabel(self) -> nib.nifti1.Nifti1Image:
+        return nib.nifti1.Nifti1Image(np.array(self), self.affine)
