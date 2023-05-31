@@ -53,14 +53,14 @@ def dicom_image(dicom_image_path: pathlib.Path) -> pydicom.Dataset:
 
 
 @pytest.fixture(scope="session")
-def nifti() -> nib.Nifti1Image:
+def nifti() -> nib.nifti1.Nifti1Image:
     data: np.ndarray = np.random.randn(*NIFTI_IMAGE_SHAPE).astype(np.float32)
-    return nib.Nifti1Image(data, np.eye(4))
+    return nib.nifti1.Nifti1Image(data, np.eye(4))
 
 
 def _make_nifti_path(
     tmp_path_factory: pytest.TempPathFactory,
-    nifti: nib.Nifti1Image,
+    nifti: nib.nifti1.Nifti1Image,
     extension: str,
 ) -> pathlib.Path:
     dcm_dir = tmp_path_factory.mktemp(extension.replace(".", "")).resolve(strict=True)
@@ -71,14 +71,14 @@ def _make_nifti_path(
 
 @pytest.fixture(scope="session")
 def nifti_gzipped_image_path(
-    tmp_path_factory: pytest.TempPathFactory, nifti: nib.Nifti1Image
+    tmp_path_factory: pytest.TempPathFactory, nifti: nib.nifti1.Nifti1Image
 ) -> pathlib.Path:
     return _make_nifti_path(tmp_path_factory, nifti, ".nii.gz")
 
 
 @pytest.fixture(scope="session")
 def nifti_image_path(
-    tmp_path_factory: pytest.TempPathFactory, nifti: nib.Nifti1Image
+    tmp_path_factory: pytest.TempPathFactory, nifti: nib.nifti1.Nifti1Image
 ) -> pathlib.Path:
     return _make_nifti_path(tmp_path_factory, nifti, ".nii")
 
@@ -122,11 +122,13 @@ def zipped_encrypted_dicom_path(
 
 @pytest.fixture(scope="session")
 def zipped_nifti_path(
-    tmp_path_factory: pytest.TempPathFactory, nifti: nib.Nifti1Image
+    tmp_path_factory: pytest.TempPathFactory, nifti: nib.nifti1.Nifti1Image
 ) -> pathlib.Path:
     zipped_path = tmp_path_factory.getbasetemp().resolve(strict=True) / "nii.zip"
     with io.BytesIO() as buffer:
-        file_map = nib.Nifti1Image.make_file_map({"image": buffer, "header": buffer})
+        file_map = nib.nifti1.Nifti1Image.make_file_map(
+            {"image": buffer, "header": buffer}
+        )
         nifti.to_file_map(file_map)
         with zipfile.ZipFile(zipped_path, mode="w") as zf:
             zf.writestr("test", buffer.getvalue())
@@ -135,11 +137,13 @@ def zipped_nifti_path(
 
 @pytest.fixture(scope="session")
 def zipped_nifti_gzipped_path(
-    tmp_path_factory: pytest.TempPathFactory, nifti: nib.Nifti1Image
+    tmp_path_factory: pytest.TempPathFactory, nifti: nib.nifti1.Nifti1Image
 ) -> pathlib.Path:
     zipped_path = tmp_path_factory.getbasetemp().resolve(strict=True) / "niigz.zip"
     with io.BytesIO() as buffer:
-        file_map = nib.Nifti1Image.make_file_map({"image": buffer, "header": buffer})
+        file_map = nib.nifti1.Nifti1Image.make_file_map(
+            {"image": buffer, "header": buffer}
+        )
         nifti.to_file_map(file_map)
         gz = gzip.compress(buffer.getvalue())
         with zipfile.ZipFile(zipped_path, mode="w") as zf:
@@ -231,7 +235,7 @@ def test_nifti_image_from_stream(nifti_image_path: pathlib.Path) -> None:
 def test_nifti_image_from_zipped_stream(zipped_nifti_path: pathlib.Path) -> None:
     with open(zipped_nifti_path, "rb") as f:
         image: mioi.Image = mioi.Image.from_zipped_stream(
-            f, gzipped=False, image_class=nib.Nifti1Image
+            f, gzipped=False, image_class=nib.nifti1.Nifti1Image
         )
     assert image.shape == NIFTI_IMAGE_SHAPE
 
@@ -241,7 +245,7 @@ def test_nifti_gzipped_image_from_zipped_stream(
 ) -> None:
     with open(zipped_nifti_gzipped_path, "rb") as f:
         image: mioi.Image = mioi.Image.from_zipped_stream(
-            f, gzipped=True, image_class=nib.Nifti1Image
+            f, gzipped=True, image_class=nib.nifti1.Nifti1Image
         )
     assert image.shape == NIFTI_IMAGE_SHAPE
 
@@ -348,4 +352,4 @@ def test_to_sitk(image: mioi.Image) -> None:
 
 
 def test_to_nibabel(image: mioi.Image) -> None:
-    assert isinstance(image.to_nibabel(), nib.Nifti1Image)
+    assert isinstance(image.to_nibabel(), nib.nifti1.Nifti1Image)
